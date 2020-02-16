@@ -9,6 +9,7 @@ class FastTextClassifier:
     def __init__(self, model_path=os.path.join(root_dir(), "models", "mini.ftz")):
         self.model_path = model_path
         self.model = None
+        self.load_model()
 
     def load_model(self):
         model = fasttext.load_model(self.model_path)
