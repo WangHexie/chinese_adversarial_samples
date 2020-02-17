@@ -4,8 +4,8 @@ import re
 from pathlib import Path
 from typing import List
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import pkuseg
 
 
@@ -44,6 +44,17 @@ class Sentences:
         return txt.split()
 
     @staticmethod
+    def __read_train_insult_data() -> pd.DataFrame:
+        path = '/tcdata/benchmark_texts.txt'
+        with open(path, "r", encoding="utf-8") as f:
+            txt = f.read()
+        sentences = txt.split()
+        insult_txt_df = pd.DataFrame(np.array([sentences, np.zeros(len(sentences))]).T,
+                                     columns=["sentence", "indirect_label"])
+
+        return insult_txt_df
+
+    @staticmethod
     def __remove_emoji(string):
         emoji_pattern = re.compile("["
                                    u"\U0001F600-\U0001F64F"  # emoticons
@@ -55,11 +66,20 @@ class Sentences:
         return emoji_pattern.sub(r'', string)
 
     @staticmethod
-    def read_insult_data()->pd.DataFrame:
+    def read_insult_data() -> pd.DataFrame:
         insult_df = Sentences.__read_insult_csv()
         insult_txt = Sentences.__read_insult_txt()
 
-        insult_txt_df = pd.DataFrame(np.array([insult_txt, np.ones(len(insult_txt)) * 2]).T, columns=["sentence", "indirect_label"])
+        insult_txt_df = pd.DataFrame(np.array([insult_txt, np.ones(len(insult_txt)) * 2]).T,
+                                     columns=["sentence", "indirect_label"])
+
+        # try:
+        #     train_insult = Sentences.__read_train_insult_data()
+        #     return pd.concat([insult_df, insult_txt_df, train_insult], ignore_index=True)
+        # except FileNotFoundError:
+        #     print("not in train mode")
+        #     return pd.concat([insult_df, insult_txt_df], ignore_index=True)
+
         return pd.concat([insult_df, insult_txt_df], ignore_index=True)
 
     @staticmethod
@@ -95,8 +115,9 @@ class Tokenizer:
 
 
 if __name__ == '__main__':
-    # data = Sentences.read_full_data(ignore_indirect_data=False)
+    data = Sentences.read_full_data(ignore_indirect_data=False)
+    print(data)
     # print(len(data[data["label"]==1]))
     # data = Sentences.read_insult_data()
     # print(data[data["indirect_label"] == 1])
-    print(Tokenizer().tokenize("你说的东西我听不懂"))
+    # print(Tokenizer().tokenize("你说的东西我听不懂"))

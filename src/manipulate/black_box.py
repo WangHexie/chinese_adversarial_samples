@@ -1,8 +1,4 @@
-import random
-from string import punctuation
-
 import numpy as np
-from pypinyin import lazy_pinyin
 
 from src.config.configs import no_chinese_tokenizer_word_tf_idf_config, single_character_tf_idf_config, \
     SOTAAttackConfig, strong_attack_config
@@ -38,7 +34,7 @@ class PaperRealize:
     def tokenize_text(self, text):
         return self.tokenizer(text)
 
-    def __identify_important_word(self, text_list):
+    def _identify_important_word(self, text_list):
         # todo: add stop word list
         leave_one_text_list = ["".join(text_list)]
 
@@ -53,7 +49,7 @@ class PaperRealize:
         leave_one_probs = probs[1:]
         return origin_prob - np.array(leave_one_probs)
 
-    def __replace_text_and_predict(self, text_tokens, synonyms, index):
+    def _replace_text_and_predict(self, text_tokens, synonyms, index):
         sentences = []
         for word in synonyms:
             temp = text_tokens.copy()
@@ -62,7 +58,7 @@ class PaperRealize:
         return self.classifier.predict(sentences)
 
     @staticmethod
-    def __choose_synonym_to_replace(scores, original_scores, score_threshold=0.4):
+    def _choose_synonym_to_replace(scores, original_scores, score_threshold=0.4):
         """
         Todo: choose a real one
         :param scores:
@@ -78,7 +74,7 @@ class PaperRealize:
         return np.argmin(scores), False
 
     @staticmethod
-    def __replace_with_synonym(text_token, index_to_replace, synonyms, index_of_synonyms):
+    def _replace_with_synonym(text_token, index_to_replace, synonyms, index_of_synonyms):
         if index_of_synonyms is None:
             return text_token
         text_token[index_to_replace] = synonyms[index_of_synonyms]
@@ -91,22 +87,74 @@ class PaperRealize:
         tokenized_text = self.tokenize_text(text)
 
         # identify important word
-        important_score = self.__identify_important_word(tokenized_text)
+        important_score = self._identify_important_word(tokenized_text)
 
         important_word_index = np.argsort(important_score)[::-1]
 
         for i in range(min(len(tokenized_text), self.attack_config.top_num_of_word_to_modify)):
             # find synonyms of important word
+
+            index_of_word_to_replace = important_word_index[i]
+
             try:
-                synonyms = self.word_vector.most_similar(tokenized_text[important_word_index[i]],
+                synonyms = self.word_vector.most_similar(tokenized_text[index_of_word_to_replace],
                                                          topn=self.attack_config.num_of_synonyms)
             except KeyError:
                 continue
             # replace and predict
-            scores = self.__replace_text_and_predict(tokenized_text, synonyms, i)
+            scores = self._replace_text_and_predict(tokenized_text, synonyms, index_of_word_to_replace)
 
-            synonym_index, has_succeeded = self.__choose_synonym_to_replace(scores, origin_score)
-            tokenized_text = self.__replace_with_synonym(tokenized_text, i, synonyms, synonym_index)
+            synonym_index, has_succeeded = self._choose_synonym_to_replace(scores, origin_score)
+            tokenized_text = self._replace_with_synonym(tokenized_text, index_of_word_to_replace, synonyms,
+                                                        synonym_index)
+            if has_succeeded:
+                break
+
+        return "".join(tokenized_text)
+
+
+class SelfDefined(PaperRealize):
+    def _identify_important_word(self, text_list):
+        word_to_replace = ''
+        # todo: add stop word list
+        leave_one_text_list = ["".join(text_list)]
+
+        for i in range(len(text_list)):
+            text = text_list.copy()
+            # act as out-of-vocabulary
+            text[i] = word_to_replace
+            leave_one_text_list.append("".join(text))
+
+        probs = self.classifier.predict(leave_one_text_list)
+        origin_prob = probs[0]
+        leave_one_probs = probs[1:]
+        return origin_prob - np.array(leave_one_probs)
+
+    def craft_one_adversarial_sample(self, text):
+        origin_score = self.classifier.predict([text])[0]
+
+        word_to_replace = ['']
+
+        # tokenize text
+        tokenized_text = self.tokenize_text(text)
+
+        # identify important word
+        important_score = self._identify_important_word(tokenized_text)
+        important_word_index = np.argsort(important_score)[::-1]
+
+        for i in range(min(len(tokenized_text), self.attack_config.top_num_of_word_to_modify)):
+            # find synonyms of important word
+
+            index_of_word_to_replace = important_word_index[i]
+
+            synonyms = word_to_replace
+
+            # replace and predict
+            scores = self._replace_text_and_predict(tokenized_text, synonyms, index_of_word_to_replace)
+
+            synonym_index, has_succeeded = self._choose_synonym_to_replace(scores, origin_score)
+            tokenized_text = self._replace_with_synonym(tokenized_text, index_of_word_to_replace, synonyms,
+                                                        synonym_index)
             if has_succeeded:
                 break
 
@@ -117,20 +165,23 @@ def replace_dirty_word(sentences):
     global dirty_character_list
     global dirty_word_list
 
-    for k in dirty_word_list:
-        sentences = sentences.replace(k, insert_sting_middle(k, random.choice(punctuation), 1))
-
+    # for k in dirty_word_list:
+    #     sentences = sentences.replace(k, insert_sting_middle(k, random.choice(punctuation), 1))
+    #
     # for k in dirty_character_list:
-    #     sentences = sentences.replace(k, pinyin(k, style=Style.FIRST_LETTER)[0][0])
+    #     sentences = sentences.replace(k, lazy_pinyin(k)[0])
+
+    for k in dirty_word_list:
+        sentences = sentences.replace(k, '')
+
     for k in dirty_character_list:
-        sentences = sentences.replace(k, lazy_pinyin(k)[0])
+        sentences = sentences.replace(k, '')
 
     return sentences
 
 
 if __name__ == '__main__':
-    pr = PaperRealize(FastTextClassifier(), word_vector=WordVector(), attack_config=strong_attack_config,
-                      tokenizer=Tokenizer().tokenize)
+    pr = PaperRealize(FastTextClassifier(), word_vector=WordVector(), attack_config=strong_attack_config)
     data = Sentences.read_insult_data()
     p = data["sentence"].map(lambda x: pr.craft_one_adversarial_sample(x))
     # scores = pr.classifier.predict(p.values)
