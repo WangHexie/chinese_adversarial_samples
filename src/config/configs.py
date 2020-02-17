@@ -23,5 +23,17 @@ class TFIDFConfig:
 single_character_tf_idf_config = asdict(TFIDFConfig())
 no_chinese_tokenizer_word_tf_idf_config = asdict(TFIDFConfig(ngram_range=(2, 3)))
 
+
+@dataclass
+class SOTAAttackConfig:
+    top_num_of_word_to_modify: int = 5
+    num_of_synonyms: int = 5
+    threshold_of_stopping_attack: float = 0.4
+    tokenize_method: int = 0
+
+
+strong_attack_config = SOTAAttackConfig(top_num_of_word_to_modify=6, num_of_synonyms=8,
+                                        threshold_of_stopping_attack=0.02, tokenize_method=0)
+
 if __name__ == '__main__':
     print(no_chinese_tokenizer_word_tf_idf_config)

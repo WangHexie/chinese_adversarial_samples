@@ -6,6 +6,7 @@ from typing import List
 
 import pandas as pd
 import numpy as np
+import pkuseg
 
 
 def root_dir():
@@ -54,7 +55,7 @@ class Sentences:
         return emoji_pattern.sub(r'', string)
 
     @staticmethod
-    def read_insult_data():
+    def read_insult_data()->pd.DataFrame:
         insult_df = Sentences.__read_insult_csv()
         insult_txt = Sentences.__read_insult_txt()
 
@@ -67,8 +68,11 @@ class Sentences:
         return pd.read_csv(path, index_col=0, names=["indirect_label", "sentence"])
 
     @staticmethod
-    def read_full_data(num_of_positive=2361):
+    def read_full_data(num_of_positive=2361, ignore_indirect_data=True):
         negative_data = Sentences.read_insult_data()
+        if ignore_indirect_data:
+            negative_data = negative_data[negative_data["indirect_label"] != 1]
+            negative_data.reset_index(inplace=True)
         negative_data["label"] = np.ones(len(negative_data))
 
         positive_data = Sentences.read_positive_data()
@@ -81,12 +85,18 @@ class Sentences:
 
         return full_data.drop_duplicates()
 
-    @staticmethod
-    def test(tt):
-        return Sentences.__remove_emoji(tt)
+
+class Tokenizer:
+    def __init__(self):
+        self.seg = pkuseg.pkuseg()
+
+    def tokenize(self, text):
+        return self.seg.cut(text)
 
 
 if __name__ == '__main__':
-    data = Sentences.read_full_data()
-    print(len(data[data["label"]==1]))
-    print(Sentences.read_full_data())
+    # data = Sentences.read_full_data(ignore_indirect_data=False)
+    # print(len(data[data["label"]==1]))
+    # data = Sentences.read_insult_data()
+    # print(data[data["indirect_label"] == 1])
+    print(Tokenizer().tokenize("你说的东西我听不懂"))

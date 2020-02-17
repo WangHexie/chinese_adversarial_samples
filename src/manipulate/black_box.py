@@ -1,12 +1,12 @@
 import random
-import numpy as np
 from string import punctuation
 
+import numpy as np
 from pypinyin import lazy_pinyin
-from gensim.models import KeyedVectors
 
-from src.config.configs import no_chinese_tokenizer_word_tf_idf_config, single_character_tf_idf_config
-from src.data.dataset import Sentences
+from src.config.configs import no_chinese_tokenizer_word_tf_idf_config, single_character_tf_idf_config, \
+    SOTAAttackConfig, strong_attack_config
+from src.data.dataset import Sentences, Tokenizer
 from src.predict.classifier import FastTextClassifier
 from src.predict.word_vector import WordVector
 from src.train.identify_importance_word import InspectFeatures
@@ -19,16 +19,24 @@ def insert_sting_middle(string, word, index):
     return string[:index] + word + string[index:]
 
 
+def tokenizer_selector(method) -> callable:
+    if method == 0:
+        return list
+
+    if method == 1:
+        return Tokenizer().tokenize
+
+
 class PaperRealize:
 
-    def __init__(self, classifier, word_vector):
+    def __init__(self, classifier, word_vector, attack_config: SOTAAttackConfig):
         self.classifier = classifier
         self.word_vector = word_vector
+        self.attack_config = attack_config
+        self.tokenizer = tokenizer_selector(method=self.attack_config.tokenize_method)
 
-    @staticmethod
-    def tokenize_text(text, method=0):
-        if method == 0:
-            return list(text)
+    def tokenize_text(self, text):
+        return self.tokenizer(text)
 
     def __identify_important_word(self, text_list):
         # todo: add stop word list
@@ -76,7 +84,7 @@ class PaperRealize:
         text_token[index_to_replace] = synonyms[index_of_synonyms]
         return text_token
 
-    def craft_one_adversarial_sample(self, text, top_num_of_word_to_modify=5):
+    def craft_one_adversarial_sample(self, text):
         origin_score = self.classifier.predict([text])[0]
 
         # tokenize text
@@ -87,10 +95,11 @@ class PaperRealize:
 
         important_word_index = np.argsort(important_score)[::-1]
 
-        for i in range(min(len(tokenized_text), top_num_of_word_to_modify)):
+        for i in range(min(len(tokenized_text), self.attack_config.top_num_of_word_to_modify)):
             # find synonyms of important word
             try:
-                synonyms = self.word_vector.most_similar(tokenized_text[important_word_index[i]], topn=5)
+                synonyms = self.word_vector.most_similar(tokenized_text[important_word_index[i]],
+                                                         topn=self.attack_config.num_of_synonyms)
             except KeyError:
                 continue
             # replace and predict
@@ -120,8 +129,9 @@ def replace_dirty_word(sentences):
 
 
 if __name__ == '__main__':
-    pr = PaperRealize(FastTextClassifier(), word_vector=WordVector())
+    pr = PaperRealize(FastTextClassifier(), word_vector=WordVector(), attack_config=strong_attack_config,
+                      tokenizer=Tokenizer().tokenize)
     data = Sentences.read_insult_data()
     p = data["sentence"].map(lambda x: pr.craft_one_adversarial_sample(x))
-    scores = pr.classifier.predict(p.values)
+    # scores = pr.classifier.predict(p.values)
     print(p)
