@@ -4,7 +4,7 @@ import time
 import mysql.connector
 import requests
 
-from src.data.dataset import root_dir
+from src.data.basic_functions import root_dir
 
 
 class DataBase:
@@ -40,6 +40,7 @@ class DirtySpider:
     """
     normal_url = "https://nmsl.shadiao.app/api.php?lang=zh_cn"
     hard_url = "https://nmsl.shadiao.app/api.php?level=min&lang=zh_cn"
+    hk_url = "https://nmsl.shadiao.app/api.php?lang=zh_hk"
 
     def __init__(self, data_base: DataBase):
         self.data_base = data_base
@@ -63,15 +64,21 @@ class DirtySpider:
         else:
             self.repeat_count += 1
 
-    def get_normal_dirty(self, dirty_type: [0, 1]):
+    def get_normal_dirty(self, dirty_type: [0, 1, 2]):
         """
 
         :param dirty_type: 0:normal, 1:hard_mode
         :return:
         """
-        stop_condition = 30
+        stop_condition = 49
 
-        url = self.normal_url if dirty_type == 0 else self.hard_url
+        if dirty_type == 0:
+            url = self.normal_url
+        if dirty_type == 1:
+            url = self.hard_url
+        if dirty_type == 2:
+            url = self.hk_url
+
         while self.repeat_count < stop_condition:
             data = self.get_page(url)
             self.insert_data((data, dirty_type))
@@ -80,4 +87,4 @@ class DirtySpider:
 
 
 if __name__ == '__main__':
-    DirtySpider(DataBase()).get_normal_dirty(dirty_type=1)
+    DirtySpider(DataBase()).get_normal_dirty(dirty_type=2)

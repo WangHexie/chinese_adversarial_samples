@@ -2,7 +2,8 @@ import os
 
 from gensim.models import KeyedVectors
 
-from src.data.dataset import root_dir
+from src.config.configs import tencent_embedding_path
+from src.data.basic_functions import root_dir
 
 
 class WordVector:
@@ -24,5 +25,7 @@ class WordVector:
 
 
 if __name__ == '__main__':
-    print(WordVector().load_model().most_similar("你妈"))
+    word = "弱智"
+    print(WordVector().load_model().most_similar(word))
+    print(WordVector(path=tencent_embedding_path).load_model().most_similar(word))
 

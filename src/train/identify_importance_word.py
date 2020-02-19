@@ -25,12 +25,22 @@ class InspectFeatures:
         print("classifier score:", clf.score(features, labels))
         return clf.coef_
 
+    @staticmethod
+    def is_dirty_by_classifier(classifier, dirty_list, threshold=0.4):
+        scores = classifier.predict(dirty_list)
+        is_dirty = np.array(scores) > threshold
+
+        not_dirty = [dirty_list[i] for i in range(len(scores)) if not is_dirty[i]]
+
+        print("not dirty:", len(not_dirty), not_dirty)
+        return [dirty_list[i] for i in range(len(scores)) if is_dirty[i]]
+
     def locate_top_dirty_character(self, number_of_dirty=70):
         data = Sentences.read_full_data()
         text_features, feature_names = InspectFeatures.tf_idf_features(data["sentence"], self.tf_idf_config)
-        coef = InspectFeatures.find_important_features_by_using_linear_model(text_features, data["label"])
-        dirty_word_index = np.argsort(coef[0])[::-1]
-        return [feature_names[dirty_word_index[i]] for i in range(number_of_dirty)]
+        coef = InspectFeatures.find_important_features_by_using_linear_model(text_features, data["label"])[0]
+        dirty_word_index = np.argsort(coef)[::-1]
+        return [feature_names[dirty_word_index[i]] for i in range(len(coef)) if coef[dirty_word_index[i]] > 0][:number_of_dirty]
 
 
 if __name__ == '__main__':

@@ -4,7 +4,7 @@ import editdistance
 import numpy as np
 from gensim.models import KeyedVectors
 
-from src.data.dataset import root_dir
+from src.data.basic_functions import root_dir
 
 
 def normalized_levenshtein(str_a, str_b):

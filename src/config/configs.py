@@ -1,5 +1,8 @@
+import os
 from dataclasses import dataclass, asdict
 from typing import Callable, List
+
+from src.data.basic_functions import root_dir
 
 
 @dataclass
@@ -20,8 +23,8 @@ class TFIDFConfig:
     sublinear_tf: bool = False
 
 
-single_character_tf_idf_config = asdict(TFIDFConfig())
-no_chinese_tokenizer_word_tf_idf_config = asdict(TFIDFConfig(ngram_range=(2, 3)))
+single_character_tf_idf_config = asdict(TFIDFConfig(min_df=0.0005))
+no_chinese_tokenizer_word_tf_idf_config = asdict(TFIDFConfig(ngram_range=(2, 3), min_df=0.0005))
 
 
 @dataclass
@@ -33,7 +36,13 @@ class SOTAAttackConfig:
 
 
 strong_attack_config = SOTAAttackConfig(top_num_of_word_to_modify=6, num_of_synonyms=8,
-                                        threshold_of_stopping_attack=0.02, tokenize_method=0)
+                                        threshold_of_stopping_attack=0.02, tokenize_method=1)
+
+tencent_embedding_path = os.path.join(root_dir(), "models", "small_Tencent_AILab_ChineseEmbedding.txt")
+self_train_model_path = os.path.join(root_dir(), "models", "self_train.bin")
+self_train_test_data_path = os.path.join(root_dir(), "data", "test.csv")
+self_train_train_data_path = os.path.join(root_dir(), "data", "train.csv")
 
 if __name__ == '__main__':
+    print(self_train_test_data_path)
     print(no_chinese_tokenizer_word_tf_idf_config)

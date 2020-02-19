@@ -1,14 +1,18 @@
 import numpy as np
 
 from src.config.configs import no_chinese_tokenizer_word_tf_idf_config, single_character_tf_idf_config, \
-    SOTAAttackConfig, strong_attack_config
+    SOTAAttackConfig, strong_attack_config, self_train_model_path, tencent_embedding_path
 from src.data.dataset import Sentences, Tokenizer
-from src.predict.classifier import FastTextClassifier
+from src.models.classifier import FastTextClassifier
 from src.predict.word_vector import WordVector
 from src.train.identify_importance_word import InspectFeatures
 
-dirty_character_list = InspectFeatures(single_character_tf_idf_config).locate_top_dirty_character()
-dirty_word_list = InspectFeatures(no_chinese_tokenizer_word_tf_idf_config).locate_top_dirty_character()
+dirty_character_list = InspectFeatures(single_character_tf_idf_config).locate_top_dirty_character(70)
+dirty_word_list = InspectFeatures.is_dirty_by_classifier(FastTextClassifier(),
+                                                         InspectFeatures(
+                                                             no_chinese_tokenizer_word_tf_idf_config).locate_top_dirty_character(
+                                                             1000),
+                                                         0.1)
 
 
 def insert_sting_middle(string, word, index):
@@ -48,6 +52,10 @@ class PaperRealize:
         origin_prob = probs[0]
         leave_one_probs = probs[1:]
         return origin_prob - np.array(leave_one_probs)
+
+    def _temporal_head_score(self, text_list):
+        top_n = [''.join(text_list[:i+1]) for i in range(len(text_list))]
+        probs = self.classifier.predict(top_n)
 
     def _replace_text_and_predict(self, text_tokens, synonyms, index):
         sentences = []
@@ -181,8 +189,17 @@ def replace_dirty_word(sentences):
 
 
 if __name__ == '__main__':
-    pr = PaperRealize(FastTextClassifier(), word_vector=WordVector(), attack_config=strong_attack_config)
+    pr = PaperRealize(FastTextClassifier(self_train_model_path),
+                      word_vector=WordVector(tencent_embedding_path),
+                      attack_config=strong_attack_config)
     data = Sentences.read_insult_data()
+
+    print(dirty_character_list)
+    print(dirty_word_list)
     p = data["sentence"].map(lambda x: pr.craft_one_adversarial_sample(x))
-    # scores = pr.classifier.predict(p.values)
-    print(p)
+    # scores = pr.classifier.predict(p.values.tolist())
+
+    print(len(InspectFeatures.is_dirty_by_classifier(pr.classifier, dirty_character_list, 0.4)))
+    print(len(InspectFeatures.is_dirty_by_classifier(pr.classifier, dirty_word_list, 0.4)))
+    print(p.values.tolist()[:30])
+    print(data["sentence"].values.tolist()[:30])
