@@ -34,13 +34,13 @@ class Classifier:
         from src.manipulate.black_box import PaperRealize, replace_dirty_word
 
         datas = Sentences.read_test_data()
-        pr = PaperRealize(self, word_vector=WordVector(), attack_config=strong_attack_config)
+        pr = PaperRealize([self], word_vector=WordVector(), attack_config=strong_attack_config)
 
-        preds = pr.classifier.predict(datas["sentence"].values.tolist())
+        preds = pr.classifiers[0].predict(datas["sentence"].values.tolist())
         score = accuracy_score(datas["label"].values, np.array(preds).round())
         print("untokenized score:", score)
 
-        preds = pr.classifier.predict(
+        preds = pr.classifiers[0].predict(
             datas["sentence"].map(lambda x: ' '.join(pr.tokenize_text(x))).values.tolist())
         score = accuracy_score(datas["label"].values, np.array(preds).round())
         print("tokenize score:", score)

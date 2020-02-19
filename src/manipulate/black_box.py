@@ -3,7 +3,7 @@ import numpy as np
 from src.config.configs import no_chinese_tokenizer_word_tf_idf_config, single_character_tf_idf_config, \
     SOTAAttackConfig, strong_attack_config, self_train_model_path, tencent_embedding_path
 from src.data.dataset import Sentences, Tokenizer
-from src.models.classifier import FastTextClassifier
+from src.models.classifier import FastTextClassifier, TFIDFClassifier
 from src.predict.word_vector import WordVector
 from src.train.identify_importance_word import InspectFeatures
 
@@ -29,8 +29,8 @@ def tokenizer_selector(method) -> callable:
 
 class PaperRealize:
 
-    def __init__(self, classifier, word_vector, attack_config: SOTAAttackConfig):
-        self.classifier = classifier
+    def __init__(self, classifiers, word_vector, attack_config: SOTAAttackConfig):
+        self.classifiers = classifiers
         self.word_vector = word_vector
         self.attack_config = attack_config
         self.tokenizer = tokenizer_selector(method=self.attack_config.tokenize_method)
@@ -48,14 +48,18 @@ class PaperRealize:
             text[i] = '叇'
             leave_one_text_list.append("".join(text))
 
-        probs = self.classifier.predict(leave_one_text_list)
+        probs = self.predict_use_classifiers(leave_one_text_list)
+
         origin_prob = probs[0]
         leave_one_probs = probs[1:]
         return origin_prob - np.array(leave_one_probs)
 
+    def predict_use_classifiers(self, text_list):
+        return np.mean([classifier.predict(text_list) for classifier in self.classifiers], axis=0)
+
     def _temporal_head_score(self, text_list):
         top_n = [''.join(text_list[:i+1]) for i in range(len(text_list))]
-        probs = self.classifier.predict(top_n)
+        probs = self.predict_use_classifiers(top_n)
 
     def _replace_text_and_predict(self, text_tokens, synonyms, index):
         sentences = []
@@ -63,7 +67,7 @@ class PaperRealize:
             temp = text_tokens.copy()
             temp[index] = word
             sentences.append("".join(temp))
-        return self.classifier.predict(sentences)
+        return self.predict_use_classifiers(sentences)
 
     @staticmethod
     def _choose_synonym_to_replace(scores, original_scores, score_threshold=0.4):
@@ -89,7 +93,7 @@ class PaperRealize:
         return text_token
 
     def craft_one_adversarial_sample(self, text):
-        origin_score = self.classifier.predict([text])[0]
+        origin_score = self.predict_use_classifiers([text])[0]
 
         # tokenize text
         tokenized_text = self.tokenize_text(text)
@@ -133,13 +137,13 @@ class SelfDefined(PaperRealize):
             text[i] = word_to_replace
             leave_one_text_list.append("".join(text))
 
-        probs = self.classifier.predict(leave_one_text_list)
+        probs = self.predict_use_classifiers(leave_one_text_list)
         origin_prob = probs[0]
         leave_one_probs = probs[1:]
         return origin_prob - np.array(leave_one_probs)
 
     def craft_one_adversarial_sample(self, text):
-        origin_score = self.classifier.predict([text])[0]
+        origin_score = self.predict_use_classifiers([text])[0]
 
         word_to_replace = ['']
 
@@ -189,7 +193,11 @@ def replace_dirty_word(sentences):
 
 
 if __name__ == '__main__':
-    pr = PaperRealize(FastTextClassifier(self_train_model_path),
+    data = Sentences.read_train_data()
+    pr = PaperRealize([FastTextClassifier(self_train_model_path),
+                       TFIDFClassifier(x=data["sentence"], y=data["label"]).train(),
+                       TFIDFClassifier(tf_idf_config=no_chinese_tokenizer_word_tf_idf_config, x=data["sentence"],
+                                       y=data["label"]).train()],
                       word_vector=WordVector(tencent_embedding_path),
                       attack_config=strong_attack_config)
     data = Sentences.read_insult_data()
@@ -199,7 +207,7 @@ if __name__ == '__main__':
     p = data["sentence"].map(lambda x: pr.craft_one_adversarial_sample(x))
     # scores = pr.classifier.predict(p.values.tolist())
 
-    print(len(InspectFeatures.is_dirty_by_classifier(pr.classifier, dirty_character_list, 0.4)))
-    print(len(InspectFeatures.is_dirty_by_classifier(pr.classifier, dirty_word_list, 0.4)))
+    print(len(InspectFeatures.is_dirty_by_classifier(pr.classifiers[0], dirty_character_list, 0.4)))
+    print(len(InspectFeatures.is_dirty_by_classifier(pr.classifiers[0], dirty_word_list, 0.4)))
     print(p.values.tolist()[:30])
     print(data["sentence"].values.tolist()[:30])

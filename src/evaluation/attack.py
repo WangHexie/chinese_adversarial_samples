@@ -1,13 +1,11 @@
-import os
-
 import numpy as np
 
-from src.config.configs import strong_attack_config, self_train_model_path, tencent_embedding_path
+from src.config.configs import strong_attack_config, self_train_model_path, tencent_embedding_path, \
+    no_chinese_tokenizer_word_tf_idf_config
 from src.data.dataset import Sentences
-from src.data.basic_functions import root_dir
 from src.data.measure_distance import DistanceCalculator
-from src.manipulate.black_box import PaperRealize, replace_dirty_word, SelfDefined
-from src.models.classifier import FastTextClassifier
+from src.manipulate.black_box import PaperRealize, replace_dirty_word
+from src.models.classifier import FastTextClassifier, TFIDFClassifier
 from src.predict.word_vector import WordVector
 
 
@@ -42,12 +40,22 @@ class EvaluateAttack:
         print("success rate:", success_number / len(data))
 
         distances = DistanceCalculator()(original_sentences, adversarial_sentences)
-        print("final_score:", np.dot(distances['final_similarity_score'], success_status)/len(data))
+        print("final_score:", np.dot(distances['final_similarity_score'], success_status) / len(data))
 
 
 if __name__ == '__main__':
-    pr = PaperRealize(FastTextClassifier(self_train_model_path),
+    data = Sentences.read_train_data()
+
+    cls = TFIDFClassifier(x=data["sentence"], y=data["label"]).train()
+    pr = PaperRealize([FastTextClassifier(self_train_model_path),
+                       cls,
+                       TFIDFClassifier(tf_idf_config=no_chinese_tokenizer_word_tf_idf_config, x=data["sentence"],
+                                       y=data["label"]).train()],
                       word_vector=WordVector(tencent_embedding_path),
                       attack_config=strong_attack_config)
-    EvaluateAttack.evaluate(pr.craft_one_adversarial_sample, pr.classifier, dataset_type=1)
-    EvaluateAttack.evaluate(replace_dirty_word, pr.classifier, dataset_type=1)
+    print("-----------start evaluate---------------")
+    EvaluateAttack.evaluate(pr.craft_one_adversarial_sample, cls, dataset_type=1)
+    print("-----------fasttext evaluate---------------")
+    EvaluateAttack.evaluate(pr.craft_one_adversarial_sample, pr.classifiers[0], dataset_type=1)
+    print("-----------replace evaluate---------------")
+    EvaluateAttack.evaluate(replace_dirty_word, pr.classifiers[0], dataset_type=1)
