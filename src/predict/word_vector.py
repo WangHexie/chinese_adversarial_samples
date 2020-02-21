@@ -25,7 +25,7 @@ class WordVector:
 
 
 if __name__ == '__main__':
-    word = "弱智"
+    word = "妳"
     print(WordVector().load_model().most_similar(word))
     print(WordVector(path=tencent_embedding_path).load_model().most_similar(word))
 

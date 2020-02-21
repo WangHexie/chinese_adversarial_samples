@@ -31,10 +31,10 @@ class Classifier:
         return
 
     def evaluate(self):
-        from src.manipulate.black_box import PaperRealize, replace_dirty_word
+        from src.manipulate.black_box import ImportanceBased, replace_dirty_word
 
         datas = Sentences.read_test_data()
-        pr = PaperRealize([self], word_vector=WordVector(), attack_config=strong_attack_config)
+        pr = ImportanceBased([self], word_vector=WordVector(), attack_config=strong_attack_config)
 
         preds = pr.classifiers[0].predict(datas["sentence"].values.tolist())
         score = accuracy_score(datas["label"].values, np.array(preds).round())
@@ -122,7 +122,7 @@ class TFIDFClassifier(Classifier):
         return self.vectorizer.transform(text)
 
     def predict(self, texts):
-        return self.classifier.predict(self.transform_text_to_vector(texts))
+        return self.classifier.predict_proba(self.transform_text_to_vector(texts))[:, 1]
 
     def train(self):
         self.vectorizer = self.train_tf_idf_features(self.x, self.tf_idf_config)
