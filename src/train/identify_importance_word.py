@@ -2,7 +2,8 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 
-from src.config.configs import single_character_tf_idf_config, no_chinese_tokenizer_word_tf_idf_config
+from src.config.configs import single_character_tf_idf_config, no_chinese_tokenizer_word_tf_idf_config, \
+    full_word_tf_idf_config
 from src.data.dataset import Sentences
 
 
@@ -53,4 +54,4 @@ class InspectFeatures:
 
 
 if __name__ == '__main__':
-    print(InspectFeatures(no_chinese_tokenizer_word_tf_idf_config, number_of_positive_data=-1).locate_top_not_dirty_character())
+    print(InspectFeatures(full_word_tf_idf_config, number_of_positive_data=-1).locate_top_dirty_character(800))

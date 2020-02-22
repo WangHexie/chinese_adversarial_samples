@@ -135,6 +135,18 @@ class TFIDFClassifier(Classifier):
         pass
 
 
+class LSTMClassifier(Classifier):
+
+    def load_model(self):
+        pass
+
+    def train(self):
+        pass
+
+    def predict(self, texts):
+        pass
+
+
 if __name__ == '__main__':
     data = Sentences.read_train_data()
     TFIDFClassifier(x=data["sentence"], y=data["label"]).train().evaluate()

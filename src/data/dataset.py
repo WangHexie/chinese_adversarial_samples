@@ -170,6 +170,9 @@ class Tokenizer:
     def __init__(self):
         self.seg = pkuseg.pkuseg()
 
+    def __call__(self, text):
+        return self.seg.cut(text)
+
     def tokenize(self, text):
         return self.seg.cut(text)
 

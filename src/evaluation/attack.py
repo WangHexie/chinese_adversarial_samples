@@ -49,7 +49,7 @@ if __name__ == '__main__':
 
     cls = TFIDFClassifier(x=data["sentence"], y=data["label"]).train()
     pr = RemoveImportantWord([
-        # FastTextClassifier(self_train_model_path),
+        FastTextClassifier(self_train_model_path),
         cls,
         TFIDFClassifier(tf_idf_config=no_chinese_tokenizer_word_tf_idf_config, x=data["sentence"],
                         y=data["label"]).train()
@@ -67,5 +67,5 @@ if __name__ == '__main__':
     EvaluateAttack.evaluate(SimpleDeleteAndReplacement.replace_dirty_word, pr.classifiers[0], dataset_type=1)
     print("-----------append fastext evaluate---------------")
     EvaluateAttack.evaluate(SimpleDeleteAndReplacement.random_append_good_word, FastTextClassifier(), dataset_type=1)
-    print("-----------append evaluate---------------")
-    EvaluateAttack.evaluate(SimpleDeleteAndReplacement.random_append_good_word, pr.classifiers[0], dataset_type=1)
+    print("-----------append tfidf evaluate---------------")
+    EvaluateAttack.evaluate(SimpleDeleteAndReplacement.random_append_good_word, cls, dataset_type=1)

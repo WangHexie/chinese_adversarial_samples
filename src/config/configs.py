@@ -2,6 +2,8 @@ import os
 from dataclasses import dataclass, asdict
 from typing import Callable, List
 
+import pkuseg
+
 from src.data.basic_functions import root_dir
 
 
@@ -28,6 +30,8 @@ no_chinese_tokenizer_word_tf_idf_config = asdict(TFIDFConfig(ngram_range=(2, 3),
 full_tokenizer_word_tf_idf_config = asdict(TFIDFConfig(ngram_range=(1, 3),
                                                        min_df=0.0005))
 
+full_word_tf_idf_config = asdict(TFIDFConfig(analyzer="word", tokenizer=pkuseg.pkuseg().cut, min_df=0.0))
+
 
 @dataclass
 class SOTAAttackConfig:
@@ -36,6 +40,7 @@ class SOTAAttackConfig:
     threshold_of_stopping_attack: float = 0.4
     tokenize_method: int = 0
     text_modify_percentage: float = 0.5
+    word_use_limit: int = 5
 
 
 strong_attack_config = SOTAAttackConfig(num_of_synonyms=20,
