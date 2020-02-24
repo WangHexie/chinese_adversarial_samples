@@ -7,7 +7,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 
 from src.config.configs import tencent_embedding_path, self_train_test_data_path, single_character_tf_idf_config, \
-    strong_attack_config, self_train_model_path
+    strong_attack_config, self_train_model_path, self_train_train_data_path
 from src.data.basic_functions import root_dir
 from src.data.dataset import Sentences
 from src.predict.word_vector import WordVector
@@ -31,7 +31,7 @@ class Classifier:
         return
 
     def evaluate(self):
-        from src.manipulate.black_box import ImportanceBased, replace_dirty_word
+        from src.manipulate.black_box import ImportanceBased, SimpleDeleteAndReplacement
 
         datas = Sentences.read_test_data()
         pr = ImportanceBased([self], word_vector=WordVector(), attack_config=strong_attack_config)
@@ -45,7 +45,7 @@ class Classifier:
         score = accuracy_score(datas["label"].values, np.array(preds).round())
         print("tokenize score:", score)
 
-        datas["sentence"] = datas["sentence"].map(lambda x: replace_dirty_word(x))
+        datas["sentence"] = datas["sentence"].map(lambda x: SimpleDeleteAndReplacement.delete_all_at_a_time(x))
         preds = FastTextClassifier().load_model().predict(datas["sentence"].values.tolist())
         score = accuracy_score(datas["label"].values, np.array(preds).round())
         print("remove dirty word:", score)
@@ -65,20 +65,22 @@ class FastTextClassifier(Classifier):
 
     def train(self):
         try:
-            self.model = fasttext.train_supervised(os.path.join(root_dir(), "data", "train.csv"),
+            self.model = fasttext.train_supervised(self_train_train_data_path,
                                                    dim=200,
                                                    pretrainedVectors=tencent_embedding_path,
-                                                   autotuneValidationFile=self_train_test_data_path)
+                                                   autotuneValidationFile=self_train_test_data_path,
+                                                   autotuneDuration=1200)
         except Exception:
             Sentences().save_train_data()
-            self.model = fasttext.train_supervised(os.path.join(root_dir(), "data", "train.csv"),
+            self.model = fasttext.train_supervised(self_train_train_data_path,
                                                    dim=200,
                                                    pretrainedVectors=tencent_embedding_path,
                                                    autotuneValidationFile=self_train_test_data_path,
                                                    autotuneDuration=3000)
 
-        self.model.save_model(os.path.join(root_dir(), "models", "self_train.bin"))
+        self.model.save_model(self_train_model_path)
         print(self.model.test(self_train_test_data_path))
+        return self
 
     @staticmethod
     def _modify_predict_result(predictions):
@@ -148,7 +150,8 @@ class LSTMClassifier(Classifier):
 
 
 if __name__ == '__main__':
-    data = Sentences.read_train_data()
-    TFIDFClassifier(x=data["sentence"], y=data["label"]).train().evaluate()
-    # print(score)
-    FastTextClassifier(self_train_model_path).evaluate()
+    # data = Sentences.read_train_data()
+    # TFIDFClassifier(x=data["sentence"], y=data["label"]).train().evaluate()
+    # # print(score)
+    # FastTextClassifier(self_train_model_path).evaluate()
+    FastTextClassifier().train().evaluate()

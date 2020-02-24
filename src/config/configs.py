@@ -29,7 +29,6 @@ single_character_tf_idf_config = asdict(TFIDFConfig(min_df=0.0005))
 no_chinese_tokenizer_word_tf_idf_config = asdict(TFIDFConfig(ngram_range=(2, 3), min_df=0.0005))
 full_tokenizer_word_tf_idf_config = asdict(TFIDFConfig(ngram_range=(1, 3),
                                                        min_df=0.0005))
-
 full_word_tf_idf_config = asdict(TFIDFConfig(analyzer="word", tokenizer=pkuseg.pkuseg().cut, min_df=0.0))
 
 
@@ -41,6 +40,7 @@ class SOTAAttackConfig:
     tokenize_method: int = 0
     text_modify_percentage: float = 0.5
     word_use_limit: int = 5
+    word_to_replace: str = '叇'
 
 
 strong_attack_config = SOTAAttackConfig(num_of_synonyms=20,
@@ -50,6 +50,7 @@ tencent_embedding_path = os.path.join(root_dir(), "models", "small_Tencent_AILab
 self_train_model_path = os.path.join(root_dir(), "models", "self_train.bin")
 self_train_test_data_path = os.path.join(root_dir(), "data", "test.csv")
 self_train_train_data_path = os.path.join(root_dir(), "data", "train.csv")
+augment_data_path = os.path.join(root_dir(), "data", "augment_data.csv")
 
 if __name__ == '__main__':
     print(self_train_test_data_path)

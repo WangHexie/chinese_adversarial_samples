@@ -5,7 +5,7 @@ import numpy as np
 from pypinyin import lazy_pinyin
 
 from src.config.configs import no_chinese_tokenizer_word_tf_idf_config, single_character_tf_idf_config, \
-    SOTAAttackConfig, strong_attack_config, self_train_model_path, full_tokenizer_word_tf_idf_config, \
+    SOTAAttackConfig, self_train_model_path, full_tokenizer_word_tf_idf_config, \
     full_word_tf_idf_config
 from src.data.dataset import Sentences, Tokenizer
 from src.models.classifier import FastTextClassifier, TFIDFClassifier
@@ -94,6 +94,13 @@ class ImportanceBased:
         self.word_vector.add_word_use(synonyms[index_of_synonyms], self.attack_config.word_use_limit)
         return text_token
 
+    def _find_synonyms_or_others_words(self, word):
+        return self.word_vector.find_synonyms_with_word_count_and_limitation(
+                word,
+                topn=self.attack_config.num_of_synonyms,
+                limitation=self.attack_config.word_use_limit
+            )
+
     def craft_one_adversarial_sample(self, text):
         # identify, replace_and
         origin_score = self.predict_use_classifiers([text])[0]
@@ -102,7 +109,7 @@ class ImportanceBased:
         tokenized_text = self.tokenize_text(text)
 
         # identify important word
-        important_score = self._identify_important_word(tokenized_text)
+        important_score = self._identify_important_word(tokenized_text, self.attack_config.word_to_replace)
 
         important_word_index = np.argsort(important_score)[::-1]
 
@@ -111,11 +118,8 @@ class ImportanceBased:
 
             index_of_word_to_replace = important_word_index[i]
 
-            synonyms = self.word_vector.find_synonyms_with_word_count_and_limitation(
-                tokenized_text[index_of_word_to_replace],
-                topn=self.attack_config.num_of_synonyms,
-                limitation=self.attack_config.word_use_limit
-            )
+            synonyms = self._find_synonyms_or_others_words(tokenized_text[index_of_word_to_replace])
+
             if len(synonyms) == 0:
                 continue
             # replace and predict
@@ -131,38 +135,17 @@ class ImportanceBased:
         return "".join(tokenized_text)
 
 
+class TFIDFBasedReplaceWithHomophone(ImportanceBased):
+    def _find_synonyms_or_others_words(self, word):
+        return [SimpleDeleteAndReplacement.replace_with_shape_like_or_sound_like_word(word)]
+
+
 class RemoveImportantWord(ImportanceBased):
-    def craft_one_adversarial_sample(self, text):
-        origin_score = self.predict_use_classifiers([text])[0]
-
-        word_to_replace = ['']
-
-        # tokenize text
-        tokenized_text = self.tokenize_text(text)
-
-        # identify important word
-        important_score = self._identify_important_word(tokenized_text, word_to_replace='')
-        important_word_index = np.argsort(important_score)[::-1]
-
-        for i in range(min(len(tokenized_text), self.attack_config.top_num_of_word_to_modify)):
-            # find synonyms of important word
-
-            index_of_word_to_replace = important_word_index[i]
-
-            synonyms = word_to_replace
-
-            # replace and predict
-            scores = self._replace_text_and_predict(tokenized_text, synonyms, index_of_word_to_replace)
-
-            synonym_index, has_succeeded = self._choose_synonym_to_replace(scores,
-                                                                           origin_score,
-                                                                           self.attack_config.threshold_of_stopping_attack)
-            tokenized_text = self._replace_with_synonym(tokenized_text, index_of_word_to_replace, synonyms,
-                                                        synonym_index)
-            if has_succeeded:
-                break
-
-        return "".join(tokenized_text)
+    """
+    set word_to_replace='' in config !!!!!!!!!!
+    """
+    def _find_synonyms_or_others_words(self, word):
+        return ['']
 
 
 class SimpleDeleteAndReplacement:
@@ -176,6 +159,8 @@ class SimpleDeleteAndReplacement:
                                                    number_of_positive_data=-1).locate_top_not_dirty_character()
 
     full_words = InspectFeatures(full_word_tf_idf_config, number_of_positive_data=-1).locate_top_dirty_character(1000)
+    shape_like_word = list(Sentences.read_similar_word())
+    common_word = Sentences.read_common_words()
 
     @staticmethod
     def delete_all_at_a_time(sentences):
@@ -206,17 +191,62 @@ class SimpleDeleteAndReplacement:
         return sentences
 
     @staticmethod
+    def _find_sound_like_word(word_to_replace, random_limit):
+        """
+        need to be in common word list for readability
+        :param word_to_replace:
+        :param random_limit:
+        :return:
+        """
+        common_word_list = SimpleDeleteAndReplacement.common_word
+        similar_word_list = common_word_list
+
+        max_index = len(similar_word_list) - 1
+        index = similar_word_list.index(word_to_replace)
+        movement = random.randint(-random_limit, random_limit)
+        if index + movement > max_index:
+            movement = random.randint(index - random_limit, max_index) - index
+        replace_word = similar_word_list[index + movement]
+        same_pinyin_start = SimpleDeleteAndReplacement._is_same_pinyin_start(word_to_replace, replace_word)
+        if not same_pinyin_start:
+            return SimpleDeleteAndReplacement._find_sound_like_word(word_to_replace, random_limit)
+        else:
+            return similar_word_list[index+movement]
+
+    @staticmethod
+    def _is_same_pinyin_start(word, word_n):
+        return lazy_pinyin(word)[0][0] == lazy_pinyin(word_n)[0][0]
+
+    @staticmethod
+    def replace_with_shape_like_or_sound_like_word(sentences):
+        random_limit = 10
+
+        dirty_word_list = SimpleDeleteAndReplacement.full_words
+
+        for word in dirty_word_list:
+            word_to_replace = random.choice(word)
+            try:
+
+                similar_word = SimpleDeleteAndReplacement._find_sound_like_word(word_to_replace, random_limit)
+
+                sentences = sentences.replace(word, word.replace(word_to_replace, similar_word))
+
+            except ValueError:
+                continue
+        return sentences
+
+    @staticmethod
     def replace_dirty_word(sentences):
         dirty_character_list = SimpleDeleteAndReplacement.dirty_character_list
         dirty_word_list = SimpleDeleteAndReplacement.dirty_word_list
 
         punctuation = ",\.\/\'~!@#$%()]["
 
-        for k in dirty_word_list:
-            sentences = sentences.replace(k, insert_sting_middle(k, random.choice(punctuation), 1))
+        # for k in dirty_word_list:
+        #     sentences = sentences.replace(k, insert_sting_middle(k, random.choice(punctuation), 1))
 
         for k in dirty_character_list:
-            sentences = sentences.replace(k, SimpleDeleteAndReplacement.random_upper_case(lazy_pinyin(k)[0]))
+            sentences = sentences.replace(k, lazy_pinyin(k)[0])
 
         return sentences
 
@@ -253,23 +283,26 @@ class SimpleDeleteAndReplacement:
 
 if __name__ == '__main__':
     # print(random_upper_case("what are you takkk"))
-    data = Sentences.read_train_data()
-    pr = ImportanceBased([FastTextClassifier(self_train_model_path),
-                          TFIDFClassifier(x=data["sentence"], y=data["label"]).train(),
-                          TFIDFClassifier(tf_idf_config=no_chinese_tokenizer_word_tf_idf_config, x=data["sentence"],
-                                          y=data["label"]).train()],
-                         word_vector=WordVector(),
-                         attack_config=strong_attack_config)
-    data = Sentences.read_insult_data()
+    data = Sentences.read_full_data()
+    pr = TFIDFBasedReplaceWithHomophone([
+        # FastTextClassifier(self_train_model_path),
+        # TFIDFClassifier(x=data["sentence"], y=data["label"]).train(),
+        TFIDFClassifier(tf_idf_config=full_word_tf_idf_config, x=data["sentence"],
+                        y=data["label"]).train()
+    ],
+        word_vector=WordVector(),
+        attack_config=SOTAAttackConfig(num_of_synonyms=40,
+                                       threshold_of_stopping_attack=0.1, tokenize_method=1))
+    # data = Sentences.read_insult_data()
 
     print(SimpleDeleteAndReplacement.dirty_character_list)
     print(SimpleDeleteAndReplacement.dirty_word_list)
-    p = data["sentence"].map(lambda x: pr.craft_one_adversarial_sample(x))
+    p = data["sentence"].map(lambda x: SimpleDeleteAndReplacement.replace_with_shape_like_or_sound_like_word(x))
     # scores = pr.classifier.predict(p.values.tolist())
 
-    print(len(InspectFeatures.is_dirty_by_classifier(pr.classifiers[0], SimpleDeleteAndReplacement.dirty_character_list,
-                                                     0.4)))
-    print(
-        len(InspectFeatures.is_dirty_by_classifier(pr.classifiers[0], SimpleDeleteAndReplacement.dirty_word_list, 0.4)))
+    # print(len(InspectFeatures.is_dirty_by_classifier(pr.classifiers[0], SimpleDeleteAndReplacement.dirty_character_list,
+    #                                                  0.4)))
+    # print(
+    #     len(InspectFeatures.is_dirty_by_classifier(pr.classifiers[0], SimpleDeleteAndReplacement.dirty_word_list, 0.4)))
     print(p.values.tolist()[:30])
     print(data["sentence"].values.tolist()[:30])

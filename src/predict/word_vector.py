@@ -54,6 +54,13 @@ class WordVector:
             self.word_count[word] = 1
 
     def find_synonyms_with_word_count_and_limitation(self, word, topn, limitation):
+        """
+
+        :param word:
+        :param topn:
+        :param limitation: -1 means no limitation and act as same as most_similar function
+        :return:
+        """
         def plain_find(s, w, n):
             try:
                 syns = s.most_similar(w, topn=n)
@@ -63,6 +70,12 @@ class WordVector:
             except KeyError:
                 syns = []
                 return syns
+
+        if limitation == -1:
+            try:
+                return self.most_similar(word, topn)
+            except KeyError:
+                return []
 
         limit = limitation
         topn_limit = 200

@@ -9,7 +9,7 @@ import pandas as pd
 import pkuseg
 from sklearn.model_selection import train_test_split
 
-from src.config.configs import self_train_test_data_path, self_train_train_data_path
+from src.config.configs import self_train_test_data_path, self_train_train_data_path, augment_data_path
 from src.data.basic_functions import root_dir
 
 
@@ -110,6 +110,10 @@ class Sentences:
         return full_data
 
     @staticmethod
+    def read_augment_data():
+        return pd.read_csv(augment_data_path, names=["sentence", "label"], index_col=False, )
+
+    @staticmethod
     def read_positive_data():
         path = os.path.join(root_dir(), "data", "train.txt")
         return pd.read_csv(path, index_col=0, names=["indirect_label", "sentence"])
@@ -119,19 +123,33 @@ class Sentences:
         return text.replace('\n', '')
 
     @staticmethod
-    def read_full_data(num_of_positive=2361, ignore_indirect_data=True) -> pd.DataFrame:
+    def read_full_data(num_of_positive="auto", ignore_indirect_data=True) -> pd.DataFrame:
+        """
+
+        :param num_of_positive: auto: balance negative data and positive data
+        :param ignore_indirect_data:
+        :return:
+        """
         negative_data = Sentences.read_insult_data()
         if ignore_indirect_data:
             negative_data = negative_data[negative_data["indirect_label"] != 1]
             negative_data.reset_index(inplace=True)
         negative_data["label"] = np.ones(len(negative_data))
 
+        if num_of_positive == "auto":
+            num_of_positive = len(negative_data)
+
         positive_data = Sentences.read_positive_data()
         positive_data["label"] = np.zeros(len(positive_data))
         positive_data = positive_data.iloc[:num_of_positive]
+        try:
+            augment_data = Sentences.read_augment_data()
+            full_data = pd.concat([negative_data, positive_data, augment_data], ignore_index=True, sort=False)[
+                ["sentence", "label"]]
+        except FileNotFoundError:
+            full_data = pd.concat([negative_data, positive_data], ignore_index=True, sort=False)[["sentence", "label"]]
 
-        full_data = pd.concat([negative_data, positive_data], ignore_index=True, sort=False)[["sentence", "label"]]
-
+        full_data = full_data.dropna()
         full_data["sentence"] = full_data["sentence"].map(
             lambda x: Sentences._remove_weibo_style(
                 Sentences._remove_white_space(Sentences._remove_new_line_symbol(Sentences.__remove_emoji(x)))))
@@ -145,7 +163,7 @@ class Sentences:
         data['sentence'] = data['sentence'].astype('str')
 
         train_data, test_data = train_test_split(data, test_size=0.4)
-        train_data.to_csv(os.path.join(root_dir(), "data", "train.csv"), header=False, index=False, sep=' ',
+        train_data.to_csv(self_train_train_data_path, header=False, index=False, sep=' ',
                           quoting=csv.QUOTE_NONE)
         test_data.to_csv(self_train_test_data_path, header=False, index=False, sep=' ', quoting=csv.QUOTE_NONE)
         print(test_data)
@@ -165,6 +183,20 @@ class Sentences:
     def read_train_data():
         return Sentences.read_df_data(self_train_train_data_path)
 
+    @staticmethod
+    def read_similar_word():
+        with open(os.path.join(root_dir(), "data", "similar_word.txt"), "r", encoding="gbk") as f:
+            words = f.read()
+
+        return Sentences.__remove_emoji(words.replace('\n', '').replace(' ', ''))
+
+    @staticmethod
+    def read_common_words():
+        with open(os.path.join(root_dir(), "data", "common_words.txt"), "r", encoding="utf-8") as f:
+            words = f.read()
+
+        return Sentences.__remove_emoji(words.replace('\n', '').replace(' ', ''))
+
 
 class Tokenizer:
     def __init__(self):
@@ -180,7 +212,9 @@ class Tokenizer:
 if __name__ == '__main__':
     # data = Sentences.read_full_data(ignore_indirect_data=False)
     # Sentences().save_train_data()
-    Sentences().read_test_data()
+    # print(Sentences().save_train_data(-1))
+    print(Sentences.read_common_words())
+    print(Sentences.read_similar_word())
     # print(data)
     # print(len(data[data["label"]==1]))
     # data = Sentences.read_insult_data()

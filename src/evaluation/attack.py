@@ -1,7 +1,7 @@
 import numpy as np
 
 from src.config.configs import strong_attack_config, self_train_model_path, tencent_embedding_path, \
-    no_chinese_tokenizer_word_tf_idf_config, SOTAAttackConfig
+    no_chinese_tokenizer_word_tf_idf_config, SOTAAttackConfig, full_word_tf_idf_config
 from src.data.dataset import Sentences
 from src.data.measure_distance import DistanceCalculator
 from src.manipulate.black_box import ImportanceBased, \
@@ -43,20 +43,19 @@ class EvaluateAttack:
         distances = DistanceCalculator()(original_sentences, adversarial_sentences)
         print("final_score:", np.dot(distances['final_similarity_score'], success_status) / len(data))
 
-
-if __name__ == '__main__':
+def self_defined_function():
     data = Sentences.read_test_data()
 
     cls = TFIDFClassifier(x=data["sentence"], y=data["label"]).train()
-    pr = RemoveImportantWord([
-        FastTextClassifier(self_train_model_path),
-        cls,
-        TFIDFClassifier(tf_idf_config=no_chinese_tokenizer_word_tf_idf_config, x=data["sentence"],
+    pr = ImportanceBased([
+        # FastTextClassifier(self_train_model_path),
+        # cls,
+        TFIDFClassifier(tf_idf_config=full_word_tf_idf_config, x=data["sentence"],
                         y=data["label"]).train()
     ],
         word_vector=WordVector(tencent_embedding_path),
-        attack_config=SOTAAttackConfig(num_of_synonyms=20,
-                                        threshold_of_stopping_attack=0.00001, tokenize_method=0))
+        attack_config=SOTAAttackConfig(num_of_synonyms=40,
+                                        threshold_of_stopping_attack=0.01, tokenize_method=1))
     print("-----------start tfidf evaluate---------------")
     EvaluateAttack.evaluate(pr.craft_one_adversarial_sample, cls, dataset_type=1)
     print("-----------fasttext evaluate---------------")
@@ -69,3 +68,6 @@ if __name__ == '__main__':
     EvaluateAttack.evaluate(SimpleDeleteAndReplacement.random_append_good_word, FastTextClassifier(), dataset_type=1)
     print("-----------append tfidf evaluate---------------")
     EvaluateAttack.evaluate(SimpleDeleteAndReplacement.random_append_good_word, cls, dataset_type=1)
+
+if __name__ == '__main__':
+    pass
