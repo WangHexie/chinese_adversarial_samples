@@ -156,7 +156,7 @@ class SimpleDeleteAndReplacement:
                                                                  1000),
                                                              0.1)
     good_word_and_character_list = InspectFeatures(full_tokenizer_word_tf_idf_config,
-                                                   number_of_positive_data=-1).locate_top_not_dirty_character()
+                                                   number_of_positive_data=-1).locate_top_not_dirty_character(-1)
 
     full_words = InspectFeatures(full_word_tf_idf_config, number_of_positive_data=-1).locate_top_dirty_character(1000)
     shape_like_word = list(Sentences.read_similar_word())
@@ -267,18 +267,21 @@ class SimpleDeleteAndReplacement:
         return "你这个人真好啊。" + string + "好棒，加油哦"
 
     @staticmethod
-    def random_append_good_word(string, number_to_append=10):
-        good_word_and_character = SimpleDeleteAndReplacement.full_words
+    def random_append_good_word(string, number_to_append=0.99):
+        good_word_and_character = SimpleDeleteAndReplacement.good_word_and_character_list
         count = 0
+        if type(number_to_append) == float:
+            number_to_append = int(number_to_append*len(string))
         for gwc in good_word_and_character:
             if gwc in string:
-                string = string + "，" + gwc
+                string = string + "" + gwc
                 count += 1
 
             if number_to_append == count:
                 break
 
         return string
+
 
 
 if __name__ == '__main__':
