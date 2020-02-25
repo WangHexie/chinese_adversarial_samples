@@ -52,7 +52,6 @@ feature_definition*
 test_name_list
 stage2_dataset
 *.ipynb
-features/
 *.vec
 *.ini
 *.ddm

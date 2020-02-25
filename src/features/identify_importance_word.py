@@ -2,9 +2,10 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 
-from src.config.configs import single_character_tf_idf_config, no_chinese_tokenizer_word_tf_idf_config, \
-    full_word_tf_idf_config
+from src.config.configs import single_character_tf_idf_config, full_word_tf_idf_config, \
+    no_chinese_tokenizer_word_tf_idf_config, full_tokenizer_word_tf_idf_config
 from src.data.dataset import Sentences
+from src.models.classifier import FastTextClassifier
 
 
 class InspectFeatures:
@@ -50,7 +51,8 @@ class InspectFeatures:
         if not choose_dirty:
             coef = -coef
         dirty_word_index = np.argsort(coef)[::-1]
-        return [feature_names[dirty_word_index[i]] for i in range(len(coef)) if coef[dirty_word_index[i]] > 0][:number_of_dirty]
+        return [feature_names[dirty_word_index[i]] for i in range(len(coef)) if coef[dirty_word_index[i]] > 0][
+               :number_of_dirty]
 
     def locate_top_not_dirty_character(self, number=1000):
         """
@@ -67,6 +69,30 @@ class InspectFeatures:
         :return:
         """
         return self._locate_top_character(number_of_dirty, choose_dirty=True)
+
+
+class PrepareWords:
+    @staticmethod
+    def get_dirty_character_list(number_of_characters=70):
+        return InspectFeatures(single_character_tf_idf_config).locate_top_dirty_character(number_of_characters)
+
+    @staticmethod
+    def get_dirty_word_list(number_of_characters=1000, classifier_threshold=0.1):
+        return InspectFeatures.is_dirty_by_classifier(FastTextClassifier(),
+                                                      InspectFeatures(
+                                                          no_chinese_tokenizer_word_tf_idf_config).locate_top_dirty_character(
+                                                          number_of_characters),
+                                                      classifier_threshold)
+
+    @staticmethod
+    def get_good_word_and_character_list():
+        return InspectFeatures(full_tokenizer_word_tf_idf_config,
+                               number_of_positive_data=-1).locate_top_not_dirty_character(-1)
+
+    @staticmethod
+    def get_full_bad_words_and_character(number_of_characters=1000):
+        return InspectFeatures(full_word_tf_idf_config, number_of_positive_data=-1).locate_top_dirty_character(
+            number_of_characters)
 
 
 if __name__ == '__main__':

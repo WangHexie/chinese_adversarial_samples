@@ -1,16 +1,18 @@
+import abc
 import math
 import random
 
 import numpy as np
 from pypinyin import lazy_pinyin
+from src.features.identify_importance_word import InspectFeatures
 
 from src.config.configs import no_chinese_tokenizer_word_tf_idf_config, single_character_tf_idf_config, \
     SOTAAttackConfig, self_train_model_path, full_tokenizer_word_tf_idf_config, \
     full_word_tf_idf_config
 from src.data.dataset import Sentences, Tokenizer
+from src.features.identify_importance_word import PrepareWords
 from src.models.classifier import FastTextClassifier, TFIDFClassifier
 from src.predict.word_vector import WordVector
-from src.train.identify_importance_word import InspectFeatures
 
 
 def insert_sting_middle(string, word, index):
@@ -96,10 +98,10 @@ class ImportanceBased:
 
     def _find_synonyms_or_others_words(self, word):
         return self.word_vector.find_synonyms_with_word_count_and_limitation(
-                word,
-                topn=self.attack_config.num_of_synonyms,
-                limitation=self.attack_config.word_use_limit
-            )
+            word,
+            topn=self.attack_config.num_of_synonyms,
+            limitation=self.attack_config.word_use_limit
+        )
 
     def craft_one_adversarial_sample(self, text):
         # identify, replace_and
@@ -144,6 +146,7 @@ class RemoveImportantWord(ImportanceBased):
     """
     set word_to_replace='' in config !!!!!!!!!!
     """
+
     def _find_synonyms_or_others_words(self, word):
         return ['']
 
@@ -211,7 +214,7 @@ class SimpleDeleteAndReplacement:
         if not same_pinyin_start:
             return SimpleDeleteAndReplacement._find_sound_like_word(word_to_replace, random_limit)
         else:
-            return similar_word_list[index+movement]
+            return similar_word_list[index + movement]
 
     @staticmethod
     def _is_same_pinyin_start(word, word_n):
@@ -271,7 +274,7 @@ class SimpleDeleteAndReplacement:
         good_word_and_character = SimpleDeleteAndReplacement.good_word_and_character_list
         count = 0
         if type(number_to_append) == float:
-            number_to_append = int(number_to_append*len(string))
+            number_to_append = int(number_to_append * len(string))
         for gwc in good_word_and_character:
             if gwc in string:
                 string = string + "" + gwc
@@ -283,24 +286,57 @@ class SimpleDeleteAndReplacement:
         return string
 
 
+class RuleBased:
+    @abc.abstractmethod
+    def replace(self, sentences):
+        pass
+
+
+class ReplaceWithSynonyms(RuleBased):
+    def __init__(self, word_vector: WordVector):
+        self.word_vector = word_vector
+        self.bad_words = PrepareWords.get_full_bad_words_and_character(2000)
+        self.random_limit = 10
+        self.use_limit = 20
+
+    def replace(self, sentences):
+
+        for word in self.bad_words:
+            try:
+                similar_word = self.word_vector.find_synonyms_with_word_count_and_limitation(
+                    word,
+                    topn=self.random_limit,
+                    limitation=self.use_limit
+                )
+
+                sentences = sentences.replace(word, random.choice(similar_word))
+
+            except ValueError:
+                continue
+            except IndexError:
+                continue
+
+        return sentences
+
 
 if __name__ == '__main__':
     # print(random_upper_case("what are you takkk"))
     data = Sentences.read_full_data()
-    pr = TFIDFBasedReplaceWithHomophone([
-        # FastTextClassifier(self_train_model_path),
-        # TFIDFClassifier(x=data["sentence"], y=data["label"]).train(),
-        TFIDFClassifier(tf_idf_config=full_word_tf_idf_config, x=data["sentence"],
-                        y=data["label"]).train()
-    ],
-        word_vector=WordVector(),
-        attack_config=SOTAAttackConfig(num_of_synonyms=40,
-                                       threshold_of_stopping_attack=0.1, tokenize_method=1))
+    # pr = TFIDFBasedReplaceWithHomophone([
+    #     # FastTextClassifier(self_train_model_path),
+    #     # TFIDFClassifier(x=data["sentence"], y=data["label"]).train(),
+    #     TFIDFClassifier(tf_idf_config=full_word_tf_idf_config, x=data["sentence"],
+    #                     y=data["label"]).train()
+    # ],
+    #     word_vector=WordVector(),
+    #     attack_config=SOTAAttackConfig(num_of_synonyms=40,
+    #                                    threshold_of_stopping_attack=0.1, tokenize_method=1))
     # data = Sentences.read_insult_data()
 
     print(SimpleDeleteAndReplacement.dirty_character_list)
     print(SimpleDeleteAndReplacement.dirty_word_list)
-    p = data["sentence"].map(lambda x: SimpleDeleteAndReplacement.replace_with_shape_like_or_sound_like_word(x))
+    r = ReplaceWithSynonyms(word_vector=WordVector())
+    p = data["sentence"].map(lambda x: r.replace(x))
     # scores = pr.classifier.predict(p.values.tolist())
 
     # print(len(InspectFeatures.is_dirty_by_classifier(pr.classifiers[0], SimpleDeleteAndReplacement.dirty_character_list,
