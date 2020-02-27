@@ -4,7 +4,7 @@ from gensim.models import KeyedVectors
 
 from src.config.configs import tencent_embedding_path
 from src.data.basic_functions import root_dir
-
+import numpy as np
 
 class WordVector:
     def __init__(self, path=os.path.join(root_dir(), "models", "zh.300.vec.gz")):
@@ -30,6 +30,12 @@ class WordVector:
     def _modify_similar_result(result):
         return [item[0] for item in result]
 
+    def get_vector(self, word):
+        try:
+            return self.vector.get_vector(word)
+        except KeyError:
+            return np.zeros(len(self.get_vector("你")))
+
     def most_similar(self, text, topn=10):
         try:
             syns = self._find_in_cache(text, topn=topn)
@@ -42,7 +48,7 @@ class WordVector:
     def add_word_use(self, word, limitation):
         """
         limit number of use of a word to bypass new word finding model
-        :param limitation:
+        :param limitation: -1 : no limitation
         :param word:
         :return:
         """
@@ -53,7 +59,7 @@ class WordVector:
         else:
             self.word_count[word] = 1
 
-    def find_synonyms_with_word_count_and_limitation(self, word, topn, limitation):
+    def find_synonyms_with_word_count_and_limitation(self, word, topn):
         """
 
         :param word:
@@ -71,24 +77,18 @@ class WordVector:
                 syns = []
                 return syns
 
-        if limitation == -1:
-            try:
-                return self.most_similar(word, topn)
-            except KeyError:
-                return []
-
-        limit = limitation
-        topn_limit = 200
+        origin_topn = topn
+        topn_limit = 85  # use this parameter to avoid topn going to high
         synonyms = plain_find(self, word, topn)
-        while (len(synonyms) < limit) and (topn < topn_limit):
+        while (len(synonyms) < topn) and (topn < topn_limit):
             topn = 2*topn
             synonyms = plain_find(self, word, topn)
 
-        return synonyms[:limit]
+        return synonyms[:origin_topn]
 
 
 if __name__ == '__main__':
-    w = "妳"
-    print(WordVector().load_model().most_similar(w))
+    w = "剥皮"
+    # print(WordVector().load_model().most_similar(w))
     print(WordVector(path=tencent_embedding_path).load_model().most_similar(w))
 

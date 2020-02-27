@@ -39,7 +39,7 @@ class SOTAAttackConfig:
     threshold_of_stopping_attack: float = 0.4
     tokenize_method: int = 0
     text_modify_percentage: float = 0.5
-    word_use_limit: int = 5
+    word_use_limit: int = 20
     word_to_replace: str = '叇'
 
 

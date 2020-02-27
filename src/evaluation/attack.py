@@ -4,8 +4,9 @@ from src.config.configs import strong_attack_config, self_train_model_path, tenc
     no_chinese_tokenizer_word_tf_idf_config, SOTAAttackConfig, full_word_tf_idf_config
 from src.data.dataset import Sentences
 from src.data.measure_distance import DistanceCalculator
-from src.manipulate.black_box import ImportanceBased, \
-    SimpleDeleteAndReplacement, RemoveImportantWord
+from src.manipulate.importance_based import ImportanceBased, \
+    RemoveImportantWord
+from src.manipulate.rule_based import ReplaceWithSynonyms, SimpleDeleteAndReplacement
 from src.models.classifier import FastTextClassifier, TFIDFClassifier
 from src.predict.word_vector import WordVector
 
@@ -23,6 +24,15 @@ class EvaluateAttack:
             return data
 
     @staticmethod
+    def _evaluate_distance_and_score(scores, original_sentences, adversarial_sentences):
+        success_status = np.array(scores) < 0.5
+        success_number = success_status.sum()
+        print("success rate:", success_number / len(scores))
+
+        distances = DistanceCalculator()(list(original_sentences), list(adversarial_sentences))
+        print("final_score:", np.dot(distances['final_similarity_score'], success_status) / len(scores))
+
+    @staticmethod
     def evaluate(attack_method: callable, classifier, dataset_type=0):
         data = EvaluateAttack.choose_dataset(dataset_type)
 
@@ -36,12 +46,14 @@ class EvaluateAttack:
         adversarial_sentences = data["sentence"].map(lambda x: attack_method(x)).values.tolist()
         scores = classifier.predict(adversarial_sentences)
 
-        success_status = np.array(scores) < 0.5
-        success_number = success_status.sum()
-        print("success rate:", success_number / len(data))
+        EvaluateAttack._evaluate_distance_and_score(scores, original_sentences, adversarial_sentences)
+        print("----------- success in the success ------------------")
+        success_status = np.array(success_status)
+        scores = np.array(scores)
+        EvaluateAttack._evaluate_distance_and_score(scores[success_status],
+                                                    np.array(original_sentences)[success_status],
+                                                    np.array(adversarial_sentences)[success_status])
 
-        distances = DistanceCalculator()(original_sentences, adversarial_sentences)
-        print("final_score:", np.dot(distances['final_similarity_score'], success_status) / len(data))
 
 def self_defined_function():
     data = Sentences.read_test_data()
@@ -69,5 +81,14 @@ def self_defined_function():
     print("-----------append tfidf evaluate---------------")
     EvaluateAttack.evaluate(SimpleDeleteAndReplacement.random_append_good_word, cls, dataset_type=1)
 
+
 if __name__ == '__main__':
-    pass
+    data = Sentences.read_full_data()
+    cls = TFIDFClassifier(x=data["sentence"], y=data["label"]).train()
+
+    r = ReplaceWithSynonyms(WordVector())
+
+    print("-----------append fastext evaluate---------------")
+    EvaluateAttack.evaluate(r.replace, FastTextClassifier(), dataset_type=0)
+    print("-----------append tfidf evaluate---------------")
+    EvaluateAttack.evaluate(r.replace, cls, dataset_type=0)

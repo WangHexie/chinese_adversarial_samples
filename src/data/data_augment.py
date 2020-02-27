@@ -7,7 +7,8 @@ import pandas as pd
 from src.config.configs import self_train_model_path, SOTAAttackConfig, full_word_tf_idf_config, augment_data_path, \
     self_train_train_data_path, self_train_test_data_path
 from src.data.dataset import Sentences
-from src.manipulate.black_box import SimpleDeleteAndReplacement, ImportanceBased
+from src.manipulate.importance_based import ImportanceBased
+from src.manipulate.rule_based import SimpleDeleteAndReplacement
 from src.models.classifier import FastTextClassifier, TFIDFClassifier
 from src.predict.word_vector import WordVector
 

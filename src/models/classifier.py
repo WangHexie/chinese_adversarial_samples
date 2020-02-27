@@ -2,6 +2,7 @@ import abc
 import os
 
 import fasttext
+import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
@@ -11,7 +12,6 @@ from src.config.configs import tencent_embedding_path, self_train_test_data_path
 from src.data.basic_functions import root_dir
 from src.data.dataset import Sentences
 from src.predict.word_vector import WordVector
-import numpy as np
 
 
 class Classifier:
@@ -31,7 +31,8 @@ class Classifier:
         return
 
     def evaluate(self):
-        from src.manipulate.black_box import ImportanceBased, SimpleDeleteAndReplacement
+        from src.manipulate.importance_based import ImportanceBased
+        from src.manipulate.rule_based import SimpleDeleteAndReplacement
 
         datas = Sentences.read_test_data()
         pr = ImportanceBased([self], word_vector=WordVector(), attack_config=strong_attack_config)
@@ -45,7 +46,7 @@ class Classifier:
         score = accuracy_score(datas["label"].values, np.array(preds).round())
         print("tokenize score:", score)
 
-        datas["sentence"] = datas["sentence"].map(lambda x: SimpleDeleteAndReplacement.delete_all_at_a_time(x))
+        datas["sentence"] = datas["sentence"].map(lambda x: Del.delete_all_at_a_time(x))
         preds = FastTextClassifier().load_model().predict(datas["sentence"].values.tolist())
         score = accuracy_score(datas["label"].values, np.array(preds).round())
         print("remove dirty word:", score)
@@ -137,6 +138,31 @@ class TFIDFClassifier(Classifier):
         pass
 
 
+class TFIDFEmbeddingClassifier(TFIDFClassifier):
+
+    def __init__(self, word_vector: WordVector, tf_idf_config=single_character_tf_idf_config, x=None, y=None):
+        super().__init__(tf_idf_config, x, y)
+        self.word_vector = word_vector
+
+    def transform_text_to_vector(self, text):
+        # TODO: BUG warning fix default vector length
+        final_vectors = []
+
+        sparse_matrix = self.vectorizer.transform(text)
+        values = sparse_matrix.data.tolist()
+        features = self.vectorizer.inverse_transform(sparse_matrix)
+
+        for word_feature in features:
+            vectors = np.array([self.word_vector.get_vector(word) * values.pop(0) for word in word_feature])
+            if len(word_feature) == 0:
+                print("error")
+                final_vectors.append(np.zeros(len(self.word_vector.get_vector("你"))))
+            else:
+                final_vectors.append(np.mean(vectors, axis=0))
+
+        return np.vstack(final_vectors)
+
+
 class LSTMClassifier(Classifier):
 
     def load_model(self):
@@ -150,8 +176,8 @@ class LSTMClassifier(Classifier):
 
 
 if __name__ == '__main__':
-    # data = Sentences.read_train_data()
-    # TFIDFClassifier(x=data["sentence"], y=data["label"]).train().evaluate()
+    data = Sentences.read_train_data()
+    TFIDFEmbeddingClassifier(word_vector=WordVector(), x=data["sentence"], y=data["label"]).train().evaluate()
     # # print(score)
     # FastTextClassifier(self_train_model_path).evaluate()
-    FastTextClassifier().train().evaluate()
+    FastTextClassifier().evaluate()

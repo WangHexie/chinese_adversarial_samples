@@ -211,10 +211,10 @@ class Tokenizer:
 
 if __name__ == '__main__':
     # data = Sentences.read_full_data(ignore_indirect_data=False)
-    # Sentences().save_train_data()
+    Sentences().save_train_data()
     # print(Sentences().save_train_data(-1))
-    print(Sentences.read_common_words())
-    print(Sentences.read_similar_word())
+    # print(Sentences.read_common_words())
+    # print(Sentences.read_similar_word())
     # print(data)
     # print(len(data[data["label"]==1]))
     # data = Sentences.read_insult_data()
