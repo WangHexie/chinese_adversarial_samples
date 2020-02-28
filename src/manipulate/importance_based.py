@@ -1,10 +1,11 @@
 import math
+from typing import List
 
 import numpy as np
 
 from src.config.configs import SOTAAttackConfig, full_word_tf_idf_config, tencent_embedding_path
 from src.data.dataset import Sentences, Tokenizer
-from src.manipulate.rule_based import SimpleDeleteAndReplacement
+from src.manipulate.rule_based import ReplaceWithPhonetic, CreateListOfDeformation, InsertPunctuation, PhoneticList
 from src.models.classifier import TFIDFClassifier
 from src.predict.word_vector import WordVector
 
@@ -98,7 +99,7 @@ class ImportanceBased:
         result = []
 
         length = len(word)
-        synonyms_num = int(self.attack_config.num_of_synonyms/length)
+        synonyms_num = int(self.attack_config.num_of_synonyms / length)
         for i in range(length):
             synonyms = self.word_vector.find_synonyms_with_word_count_and_limitation(word[i], topn=synonyms_num)
             if len(synonyms) == 0:
@@ -153,9 +154,30 @@ class ImportanceBased:
         return "".join(tokenized_text)
 
 
-class TFIDFBasedReplaceWithHomophone(ImportanceBased):
+class ReplacementEnsemble(ImportanceBased):
+    def __init__(self,
+                 classifiers,
+                 word_vector: WordVector,
+                 attack_config: SOTAAttackConfig,
+                 replacement_classes: List[CreateListOfDeformation]):
+        super().__init__(classifiers, word_vector, attack_config)
+        self.replacement_classes = replacement_classes
+
     def _find_synonyms_or_others_words(self, word):
-        return [SimpleDeleteAndReplacement.replace_with_shape_like_or_sound_like_word(word)]
+        result = []
+        for r in self.replacement_classes:
+            result += r.create(word)
+        return self.word_vector.find_synonyms_with_word_count_and_limitation(
+            word, topn=self.attack_config.num_of_synonyms) + result
+
+
+class TFIDFBasedReplaceWithHomophone(ImportanceBased):
+    def __init__(self, classifiers, word_vector: WordVector, attack_config: SOTAAttackConfig):
+        super().__init__(classifiers, word_vector, attack_config)
+        self.replacement = ReplaceWithPhonetic()
+
+    def _find_synonyms_or_others_words(self, word):
+        return [self.replacement.replace(word)]
 
 
 class RemoveImportantWord(ImportanceBased):
@@ -170,7 +192,7 @@ class RemoveImportantWord(ImportanceBased):
 if __name__ == '__main__':
     # print(random_upper_case("what are you takkk"))
     data = Sentences.read_full_data()
-    pr = ImportanceBased([
+    pr = ReplacementEnsemble([
         # FastTextClassifier(self_train_model_path),
         # TFIDFClassifier(x=data["sentence"], y=data["label"]).train(),
         TFIDFClassifier(tf_idf_config=full_word_tf_idf_config, x=data["sentence"],
@@ -178,8 +200,10 @@ if __name__ == '__main__':
     ],
         word_vector=WordVector(tencent_embedding_path),
         attack_config=SOTAAttackConfig(num_of_synonyms=40,
-                                       threshold_of_stopping_attack=0.1, tokenize_method=1))
-    data = Sentences.read_insult_data()
+                                       threshold_of_stopping_attack=0.1, tokenize_method=1),
+        replacement_classes=[InsertPunctuation(), PhoneticList()]
+    )
+    data = Sentences.read_insult_data().iloc[:500]
 
     # print(SimpleDeleteAndReplacement.dirty_character_list)
     # print(SimpleDeleteAndReplacement.dirty_word_list)

@@ -150,41 +150,49 @@ class RandomAppendGoodWords(RuleBased):
         return sentences
 
 
+class CreateListOfDeformation:
+    @abc.abstractmethod
+    def create(self, sentence):
+        pass
+
+
+class InsertPunctuation(CreateListOfDeformation):
+    def __init__(self):
+        self.punctuation = ",.|)("
+
+    def create(self, sentence):
+        if len(sentence) < 2:
+            return []
+
+        return [sentence[:i] + random.choice(self.punctuation) + sentence[i:] for i in range(1, len(sentence) - 1)]
+
+
+class PhoneticList(ReplaceWithPhonetic, CreateListOfDeformation):
+
+    def create(self, sentence):
+        random_limit = 5
+        sentence_length = len(sentence)
+        result = []
+
+        for i in range(sentence_length):
+            word_to_replace = sentence[i]
+            try:
+
+                similar_word = self._find_sound_like_word(word_to_replace, random_limit)
+
+                result.append(sentence.replace(word_to_replace, similar_word))
+
+            except ValueError:
+                continue
+        return result
+
+
 class SimpleDeleteAndReplacement:
-    # dirty_character_list = InspectFeatures(single_character_tf_idf_config).locate_top_dirty_character(70)
-    # dirty_word_list = InspectFeatures.is_dirty_by_classifier(FastTextClassifier(self_train_model_path),
-    #                                                          InspectFeatures(
-    #                                                              no_chinese_tokenizer_word_tf_idf_config).locate_top_dirty_character(
-    #                                                              1000),
-    #                                                          0.1)
-    # good_word_and_character_list = InspectFeatures(full_tokenizer_word_tf_idf_config,
-    #                                                number_of_positive_data=-1).locate_top_not_dirty_character(-1)
-    #
-    # full_words = InspectFeatures(full_word_tf_idf_config, number_of_positive_data=-1).locate_top_dirty_character(1000)
-    # shape_like_word = list(Sentences.read_similar_word())
-    # common_word = Sentences.read_common_words()
-
-    @staticmethod
-    def delete_all_at_a_time(sentences):
-        pass
-
-    @staticmethod
-    def delete_dirty_word(sentences):
-        pass
-
-    @staticmethod
-    def replace_with_shape_like_or_sound_like_word(sentences):
-        pass
 
     @staticmethod
     def replace_dirty_word(sentences):
+        # TODO: fix
         dirty_character_list = SimpleDeleteAndReplacement.dirty_character_list
-        dirty_word_list = SimpleDeleteAndReplacement.dirty_word_list
-
-        punctuation = ",\.\/\'~!@#$%()]["
-
-        # for k in dirty_word_list:
-        #     sentences = sentences.replace(k, insert_sting_middle(k, random.choice(punctuation), 1))
 
         for k in dirty_character_list:
             sentences = sentences.replace(k, lazy_pinyin(k)[0])
@@ -207,6 +215,3 @@ class SimpleDeleteAndReplacement:
     def add_good_word(string):
         return "你这个人真好啊。" + string + "好棒，加油哦"
 
-    @staticmethod
-    def random_append_good_word(string, number_to_append=0.99):
-        pass

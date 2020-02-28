@@ -74,12 +74,12 @@ def self_defined_function():
     EvaluateAttack.evaluate(pr.craft_one_adversarial_sample, FastTextClassifier(), dataset_type=1)
     print("-----------fasttext in model evaluate---------------")
     EvaluateAttack.evaluate(pr.craft_one_adversarial_sample, pr.classifiers[0], dataset_type=1)
-    print("-----------replace evaluate---------------")
-    EvaluateAttack.evaluate(SimpleDeleteAndReplacement.replace_dirty_word, pr.classifiers[0], dataset_type=1)
-    print("-----------append fastext evaluate---------------")
-    EvaluateAttack.evaluate(SimpleDeleteAndReplacement.random_append_good_word, FastTextClassifier(), dataset_type=1)
-    print("-----------append tfidf evaluate---------------")
-    EvaluateAttack.evaluate(SimpleDeleteAndReplacement.random_append_good_word, cls, dataset_type=1)
+    # print("-----------replace evaluate---------------")
+    # EvaluateAttack.evaluate(SimpleDeleteAndReplacement.replace_dirty_word, pr.classifiers[0], dataset_type=1)
+    # print("-----------append fastext evaluate---------------")
+    # EvaluateAttack.evaluate(SimpleDeleteAndReplacement.random_append_good_word, FastTextClassifier(), dataset_type=1)
+    # print("-----------append tfidf evaluate---------------")
+    # EvaluateAttack.evaluate(SimpleDeleteAndReplacement.random_append_good_word, cls, dataset_type=1)
 
 
 if __name__ == '__main__':

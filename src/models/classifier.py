@@ -32,7 +32,7 @@ class Classifier:
 
     def evaluate(self):
         from src.manipulate.importance_based import ImportanceBased
-        from src.manipulate.rule_based import SimpleDeleteAndReplacement
+        from src.manipulate.rule_based import DeleteAll
 
         datas = Sentences.read_test_data()
         pr = ImportanceBased([self], word_vector=WordVector(), attack_config=strong_attack_config)
@@ -46,7 +46,7 @@ class Classifier:
         score = accuracy_score(datas["label"].values, np.array(preds).round())
         print("tokenize score:", score)
 
-        datas["sentence"] = datas["sentence"].map(lambda x: Del.delete_all_at_a_time(x))
+        datas["sentence"] = datas["sentence"].map(lambda x: DeleteAll.replace(x))
         preds = FastTextClassifier().load_model().predict(datas["sentence"].values.tolist())
         score = accuracy_score(datas["label"].values, np.array(preds).round())
         print("remove dirty word:", score)
@@ -155,7 +155,7 @@ class TFIDFEmbeddingClassifier(TFIDFClassifier):
         for word_feature in features:
             vectors = np.array([self.word_vector.get_vector(word) * values.pop(0) for word in word_feature])
             if len(word_feature) == 0:
-                print("error")
+                print("word feature error, but fixed")
                 final_vectors.append(np.zeros(len(self.word_vector.get_vector("你"))))
             else:
                 final_vectors.append(np.mean(vectors, axis=0))

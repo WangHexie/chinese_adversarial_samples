@@ -6,6 +6,7 @@ from src.config.configs import tencent_embedding_path
 from src.data.basic_functions import root_dir
 import numpy as np
 
+
 class WordVector:
     def __init__(self, path=os.path.join(root_dir(), "models", "zh.300.vec.gz")):
         self.path = path
