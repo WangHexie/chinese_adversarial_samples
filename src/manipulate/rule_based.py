@@ -156,6 +156,47 @@ class CreateListOfDeformation:
         pass
 
 
+class ListOfSynonyms(CreateListOfDeformation):
+    def __init__(self, word_vector: WordVector, attack_config):
+        self.attack_config = attack_config
+        self.word_vector = word_vector
+
+    def _modify_single_word_in_sentences(self, word):
+        if len(word) == 1:
+            return []
+
+        result = []
+
+        length = len(word)
+        synonyms_num = int(self.attack_config.num_of_synonyms / length)
+        for i in range(length):
+            synonyms = self.word_vector.find_synonyms_with_word_count_and_limitation(word[i], topn=synonyms_num)
+            if len(synonyms) == 0:
+                continue
+            for s in synonyms:
+                result.append(word[:i] + s + word[i + 1:])
+
+        return result
+
+    def _find_synonyms_or_others_words(self, word):
+        synonyms = self.word_vector.find_synonyms_with_word_count_and_limitation(
+            word, topn=self.attack_config.num_of_synonyms)
+        if len(synonyms) == 0:
+            synonyms = self._modify_single_word_in_sentences(word)
+
+        return synonyms
+
+    def _replace_with_synonym(self, text_token, index_to_replace, synonyms, index_of_synonyms):
+        if index_of_synonyms is None:
+            return text_token
+        text_token[index_to_replace] = synonyms[index_of_synonyms]
+        self.word_vector.add_word_use(synonyms[index_of_synonyms], self.attack_config.word_use_limit)
+        return text_token
+
+    def create(self, sentence):
+        pass
+
+
 class InsertPunctuation(CreateListOfDeformation):
     def __init__(self):
         self.punctuation = ",.|)("
@@ -164,7 +205,7 @@ class InsertPunctuation(CreateListOfDeformation):
         if len(sentence) < 2:
             return []
 
-        return [sentence[:i] + random.choice(self.punctuation) + sentence[i:] for i in range(1, len(sentence) - 1)]
+        return [sentence[:i] + random.choice(self.punctuation) + sentence[i:] for i in range(len(sentence))]
 
 
 class PhoneticList(ReplaceWithPhonetic, CreateListOfDeformation):

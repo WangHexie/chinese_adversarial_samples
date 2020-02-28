@@ -157,7 +157,7 @@ class Sentences:
 
         return full_data.drop_duplicates(subset="sentence").reset_index()
 
-    def save_train_data(self, num_of_positive=4000):
+    def save_train_data(self, num_of_positive="auto"):
         data = self.read_full_data(num_of_positive=num_of_positive, ignore_indirect_data=True)[["label", "sentence"]]
         data['label'] = data['label'].map(lambda x: "__label__" + str(x))
         data['sentence'] = data['sentence'].astype('str')

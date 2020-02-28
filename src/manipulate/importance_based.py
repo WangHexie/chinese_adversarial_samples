@@ -89,8 +89,12 @@ class ImportanceBased:
         return text_token
 
     def _find_synonyms_or_others_words(self, word):
-        return self.word_vector.find_synonyms_with_word_count_and_limitation(
+        synonyms = self.word_vector.find_synonyms_with_word_count_and_limitation(
             word, topn=self.attack_config.num_of_synonyms)
+        if len(synonyms) == 0:
+            synonyms = self._modify_single_word_in_sentences(word)
+
+        return synonyms
 
     def _modify_single_word_in_sentences(self, word):
         if len(word) == 1:
@@ -136,9 +140,7 @@ class ImportanceBased:
 
             if len(synonyms) == 0:
                 # TODO: modification single word
-                synonyms = self._modify_single_word_in_sentences(tokenized_text[index_of_word_to_replace])
-                if len(synonyms) == 0:
-                    continue
+                continue
             # replace and predict
             scores = self._replace_text_and_predict(tokenized_text, synonyms, index_of_word_to_replace)
 
@@ -200,7 +202,7 @@ if __name__ == '__main__':
     ],
         word_vector=WordVector(tencent_embedding_path),
         attack_config=SOTAAttackConfig(num_of_synonyms=40,
-                                       threshold_of_stopping_attack=0.1, tokenize_method=1),
+                                       threshold_of_stopping_attack=0.08, tokenize_method=1),
         replacement_classes=[InsertPunctuation(), PhoneticList()]
     )
     data = Sentences.read_insult_data().iloc[:500]
