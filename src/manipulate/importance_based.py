@@ -165,12 +165,19 @@ class ReplacementEnsemble(ImportanceBased):
         super().__init__(classifiers, word_vector, attack_config)
         self.replacement_classes = replacement_classes
 
+    def _replace_with_synonym(self, text_token, index_to_replace, synonyms, index_of_synonyms):
+        if index_of_synonyms is None:
+            return text_token
+        text_token[index_to_replace] = synonyms[index_of_synonyms]
+        for r in self.replacement_classes:
+            r.add_word_use(synonyms[index_of_synonyms], self.attack_config.word_use_limit)
+        return text_token
+
     def _find_synonyms_or_others_words(self, word):
         result = []
         for r in self.replacement_classes:
             result += r.create(word)
-        return self.word_vector.find_synonyms_with_word_count_and_limitation(
-            word, topn=self.attack_config.num_of_synonyms) + result
+        return result
 
 
 class TFIDFBasedReplaceWithHomophone(ImportanceBased):

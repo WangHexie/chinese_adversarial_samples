@@ -46,7 +46,7 @@ class ReplaceWithSynonyms(RuleBased):
         return sentences
 
 
-class DeleteDirtyWord(RuleBased):
+class DeleteDirtyWordFoundByTokenizer(RuleBased):
     def __init__(self):
         self.full_words = PrepareWords.get_full_bad_words_and_character()
 
@@ -59,7 +59,7 @@ class DeleteDirtyWord(RuleBased):
         return sentences
 
 
-class DeleteAll(RuleBased):
+class DeleteDirtyWordFoundByNGram(RuleBased):
     def __init__(self):
         self.dirty_character_list = PrepareWords.get_dirty_character_list()
         self.dirty_word_list = PrepareWords.get_dirty_word_list()
@@ -152,14 +152,31 @@ class RandomAppendGoodWords(RuleBased):
 
 class CreateListOfDeformation:
     @abc.abstractmethod
+    def add_word_use(self, word, limitation):
+        pass
+
+    @abc.abstractmethod
     def create(self, sentence):
         pass
+
+
+class DeleteAFewCharacters(CreateListOfDeformation):
+
+    def add_word_use(self, word, limitation):
+        pass
+
+    def create(self, sentence):
+        # TODO: bug warning. output number is wrong
+        return [sentence.replace(sentence[start_index:start_index+keep_length], '') for start_index in range(len(sentence)) for keep_length in range(len(sentence) - start_index) ]
 
 
 class ListOfSynonyms(CreateListOfDeformation):
     def __init__(self, word_vector: WordVector, attack_config):
         self.attack_config = attack_config
         self.word_vector = word_vector
+
+    def add_word_use(self, word, limitation):
+        self.word_vector.add_word_use(word, limitation)
 
     def _modify_single_word_in_sentences(self, word):
         if len(word) == 1:
@@ -178,14 +195,6 @@ class ListOfSynonyms(CreateListOfDeformation):
 
         return result
 
-    def _find_synonyms_or_others_words(self, word):
-        synonyms = self.word_vector.find_synonyms_with_word_count_and_limitation(
-            word, topn=self.attack_config.num_of_synonyms)
-        if len(synonyms) == 0:
-            synonyms = self._modify_single_word_in_sentences(word)
-
-        return synonyms
-
     def _replace_with_synonym(self, text_token, index_to_replace, synonyms, index_of_synonyms):
         if index_of_synonyms is None:
             return text_token
@@ -194,10 +203,18 @@ class ListOfSynonyms(CreateListOfDeformation):
         return text_token
 
     def create(self, sentence):
-        pass
+        synonyms = self.word_vector.find_synonyms_with_word_count_and_limitation(
+            sentence, topn=self.attack_config.num_of_synonyms)
+        if len(synonyms) == 0:
+            synonyms = self._modify_single_word_in_sentences(sentence)
+
+        return synonyms
 
 
 class InsertPunctuation(CreateListOfDeformation):
+    def add_word_use(self, word, limitation):
+        pass
+
     def __init__(self):
         self.punctuation = ",.|)("
 
@@ -209,6 +226,9 @@ class InsertPunctuation(CreateListOfDeformation):
 
 
 class PhoneticList(ReplaceWithPhonetic, CreateListOfDeformation):
+
+    def add_word_use(self, word, limitation):
+        pass
 
     def create(self, sentence):
         random_limit = 5
@@ -256,3 +276,6 @@ class SimpleDeleteAndReplacement:
     def add_good_word(string):
         return "你这个人真好啊。" + string + "好棒，加油哦"
 
+
+if __name__ == '__main__':
+    print(DeleteAFewCharacters().create("你说什么？？？"))

@@ -157,12 +157,12 @@ class Sentences:
 
         return full_data.drop_duplicates(subset="sentence").reset_index()
 
-    def save_train_data(self, num_of_positive="auto"):
+    def save_train_data(self, num_of_positive="auto", test_data_size = 0.4):
         data = self.read_full_data(num_of_positive=num_of_positive, ignore_indirect_data=True)[["label", "sentence"]]
         data['label'] = data['label'].map(lambda x: "__label__" + str(x))
         data['sentence'] = data['sentence'].astype('str')
 
-        train_data, test_data = train_test_split(data, test_size=0.4)
+        train_data, test_data = train_test_split(data, test_size=test_data_size)
         train_data.to_csv(self_train_train_data_path, header=False, index=False, sep=' ',
                           quoting=csv.QUOTE_NONE)
         test_data.to_csv(self_train_test_data_path, header=False, index=False, sep=' ', quoting=csv.QUOTE_NONE)

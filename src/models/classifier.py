@@ -32,7 +32,7 @@ class Classifier:
 
     def evaluate(self):
         from src.manipulate.importance_based import ImportanceBased
-        from src.manipulate.rule_based import DeleteAll
+        from src.manipulate.rule_based import DeleteDirtyWordFoundByNGram
 
         datas = Sentences.read_test_data()
         pr = ImportanceBased([self], word_vector=WordVector(), attack_config=strong_attack_config)
@@ -46,7 +46,7 @@ class Classifier:
         score = accuracy_score(datas["label"].values, np.array(preds).round())
         print("tokenize score:", score)
 
-        datas["sentence"] = datas["sentence"].map(lambda x: DeleteAll.replace(x))
+        datas["sentence"] = datas["sentence"].map(lambda x: DeleteDirtyWordFoundByNGram.replace(x))
         preds = FastTextClassifier().load_model().predict(datas["sentence"].values.tolist())
         score = accuracy_score(datas["label"].values, np.array(preds).round())
         print("remove dirty word:", score)
@@ -79,9 +79,11 @@ class FastTextClassifier(Classifier):
                                                    autotuneValidationFile=self_train_test_data_path,
                                                    autotuneDuration=3000)
 
-        self.model.save_model(self_train_model_path)
         print(self.model.test(self_train_test_data_path))
         return self
+
+    def save_model(self):
+        self.model.save_model(self_train_model_path)
 
     @staticmethod
     def _modify_predict_result(predictions):
@@ -176,8 +178,8 @@ class LSTMClassifier(Classifier):
 
 
 if __name__ == '__main__':
-    data = Sentences.read_train_data()
-    TFIDFEmbeddingClassifier(word_vector=WordVector(), x=data["sentence"], y=data["label"]).train().evaluate()
+    # data = Sentences.read_train_data()
+    # TFIDFEmbeddingClassifier(word_vector=WordVector(), x=data["sentence"], y=data["label"]).train().evaluate()
     # # print(score)
     # FastTextClassifier(self_train_model_path).evaluate()
-    FastTextClassifier().evaluate()
+    FastTextClassifier().train().save_model()

@@ -1,12 +1,13 @@
+from dataclasses import asdict
+
 import numpy as np
 
-from src.config.configs import strong_attack_config, self_train_model_path, tencent_embedding_path, \
-    no_chinese_tokenizer_word_tf_idf_config, SOTAAttackConfig, full_word_tf_idf_config
+from src.config.configs import SOTAAttackConfig, TFIDFConfig, full_word_tf_idf_config, self_train_model_path
 from src.data.dataset import Sentences
 from src.data.measure_distance import DistanceCalculator
-from src.manipulate.importance_based import ImportanceBased, \
-    RemoveImportantWord
-from src.manipulate.rule_based import ReplaceWithSynonyms, SimpleDeleteAndReplacement
+from src.manipulate.importance_based import ReplacementEnsemble
+from src.manipulate.rule_based import DeleteDirtyWordFoundByTokenizer, \
+    ListOfSynonyms, DeleteAFewCharacters
 from src.models.classifier import FastTextClassifier, TFIDFClassifier
 from src.predict.word_vector import WordVector
 
@@ -55,27 +56,30 @@ class EvaluateAttack:
                                                     np.array(adversarial_sentences)[success_status])
 
 
-def self_defined_function():
-    data = Sentences.read_test_data()
+def self_defined_function(manipulate_func: callable):
+    data = Sentences.read_train_data()
+    classifiers = {"fasttext provided": FastTextClassifier(),
+                   "fasttext self-trained": FastTextClassifier(self_train_model_path),
+                   "tfidf ngram": TFIDFClassifier(tf_idf_config=asdict(TFIDFConfig(ngram_range=(1, 3), min_df=0.0005)),
+                                                  x=data["sentence"],
+                                                  y=data["label"]).train(),
+                   "tfidf tokenizer": TFIDFClassifier(tf_idf_config=full_word_tf_idf_config,
+                                                      x=data["sentence"],
+                                                      y=data["label"]).train(),
 
-    cls = TFIDFClassifier(x=data["sentence"], y=data["label"]).train()
-    pr = ImportanceBased([
-        # FastTextClassifier(self_train_model_path),
-        # cls,
-        TFIDFClassifier(tf_idf_config=full_word_tf_idf_config, x=data["sentence"],
-                        y=data["label"]).train()
-    ],
-        word_vector=WordVector(tencent_embedding_path),
-        attack_config=SOTAAttackConfig(num_of_synonyms=40,
-                                        threshold_of_stopping_attack=0.01, tokenize_method=1))
-    print("-----------start tfidf evaluate---------------")
-    EvaluateAttack.evaluate(pr.craft_one_adversarial_sample, cls, dataset_type=1)
-    print("-----------fasttext evaluate---------------")
-    EvaluateAttack.evaluate(pr.craft_one_adversarial_sample, FastTextClassifier(), dataset_type=1)
-    print("-----------fasttext in model evaluate---------------")
-    EvaluateAttack.evaluate(pr.craft_one_adversarial_sample, pr.classifiers[0], dataset_type=1)
-    # print("-----------replace evaluate---------------")
-    # EvaluateAttack.evaluate(SimpleDeleteAndReplacement.replace_dirty_word, pr.classifiers[0], dataset_type=1)
+                   }
+
+    control_group = {"delete all dirty word": DeleteDirtyWordFoundByTokenizer().replace}
+
+    for key, item in classifiers.items():
+        print("-----------start {} evaluate---------------".format(key))
+        EvaluateAttack.evaluate(manipulate_func, item, dataset_type=1)
+
+    for name, func in control_group.items():
+        for cls_name, cls in classifiers.items():
+            print("-----------control group {}, {} evaluate---------------".format(name, cls_name))
+            EvaluateAttack.evaluate(func, cls, dataset_type=1)
+
     # print("-----------append fastext evaluate---------------")
     # EvaluateAttack.evaluate(SimpleDeleteAndReplacement.random_append_good_word, FastTextClassifier(), dataset_type=1)
     # print("-----------append tfidf evaluate---------------")
@@ -83,12 +87,25 @@ def self_defined_function():
 
 
 if __name__ == '__main__':
-    data = Sentences.read_full_data()
-    cls = TFIDFClassifier(x=data["sentence"], y=data["label"]).train()
+    data = Sentences.read_train_data()
 
-    r = ReplaceWithSynonyms(WordVector())
+    pr = ReplacementEnsemble([
+        FastTextClassifier(),
+        # TFIDFClassifier(x=data["sentence"], y=data["label"]).train(),
+        TFIDFClassifier(tf_idf_config=asdict(TFIDFConfig(ngram_range=(1, 3), min_df=0.0005)),
+                        x=data["sentence"],
+                        y=data["label"]).train()
+    ],
+        word_vector=WordVector(),
+        attack_config=SOTAAttackConfig(num_of_synonyms=40,
+                                       threshold_of_stopping_attack=0.001, tokenize_method=1, word_use_limit=20,
+                                       text_modify_percentage=0.5),
+        replacement_classes=[DeleteAFewCharacters()]
+    )
 
-    print("-----------append fastext evaluate---------------")
-    EvaluateAttack.evaluate(r.replace, FastTextClassifier(), dataset_type=0)
-    print("-----------append tfidf evaluate---------------")
-    EvaluateAttack.evaluate(r.replace, cls, dataset_type=0)
+    self_defined_function(pr.craft_one_adversarial_sample)
+    # ListOfSynonyms(word_vector=WordVector(), attack_config=SOTAAttackConfig(num_of_synonyms=40,
+    #                                                                         threshold_of_stopping_attack=0.001,
+    #                                                                         tokenize_method=1,
+    #                                                                         word_use_limit=20,
+    #                                                                         text_modify_percentage=0.5))
