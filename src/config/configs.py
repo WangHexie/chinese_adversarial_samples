@@ -56,6 +56,7 @@ self_train_model_path = os.path.join(root_dir(), "models", "self_train.bin")
 self_train_test_data_path = os.path.join(root_dir(), "data", "test.csv")
 self_train_train_data_path = os.path.join(root_dir(), "data", "train.csv")
 augment_data_path = os.path.join(root_dir(), "data", "augment_data.csv")
+deep_model_path = os.path.join(root_dir(), "models", "deep_model.h5")
 
 if __name__ == '__main__':
     print(self_train_test_data_path)

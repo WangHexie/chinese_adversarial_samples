@@ -10,7 +10,7 @@ from sklearn.metrics import accuracy_score
 from sklearn.svm import SVC
 
 from src.config.configs import tencent_embedding_path, self_train_test_data_path, single_character_tf_idf_config, \
-    strong_attack_config, self_train_model_path, self_train_train_data_path, DeepModelConfig
+    strong_attack_config, self_train_model_path, self_train_train_data_path, DeepModelConfig, deep_model_path
 from src.data.basic_functions import root_dir
 from src.data.dataset import Sentences
 from src.predict.word_vector import WordVector
@@ -40,6 +40,7 @@ class Classifier:
         pr = ImportanceBased([self], word_vector=WordVector(), attack_config=strong_attack_config)
 
         preds = pr.classifiers[0].predict(datas["sentence"].values.tolist())
+        print(preds)
         score = accuracy_score(datas["label"].values, np.array(preds).round())
         print("untokenized score:", score)
 
@@ -48,7 +49,9 @@ class Classifier:
         score = accuracy_score(datas["label"].values, np.array(preds).round())
         print("tokenize score:", score)
 
-        datas["sentence"] = datas["sentence"].map(lambda x: DeleteDirtyWordFoundByNGram.replace(x))
+        dn = DeleteDirtyWordFoundByNGram()
+
+        datas["sentence"] = datas["sentence"].map(lambda x: dn.replace(x))
         preds = FastTextClassifier().load_model().predict(datas["sentence"].values.tolist())
         score = accuracy_score(datas["label"].values, np.array(preds).round())
         print("remove dirty word:", score)
@@ -176,27 +179,34 @@ class DeepModel(Classifier):
         model.add(tf.keras.layers.Dense(1))
         model.summary()
         model.compile(optimizer='adam',
-                      loss=tf.keras.losses.BinaryCrossentropy(from_logits=True),
+                      loss="mean_squared_error",
                       metrics=['accuracy'])
         self.model = model
         return self
 
     def save_model(self):
-        pass
+        self.model.save(deep_model_path)
 
     def load_model(self):
-        pass
+        self.model = tf.keras.models.load_model(deep_model_path)
 
     def train(self, x=None, y=None):
+        self.create_model()
+
         index_data = self.text_to_id(x)
-        self.model.fit(x=index_data, y=y, batch_size=16, epochs=5, verbose=1, callbacks=None,
+        train_data_i = tf.keras.preprocessing.sequence.pad_sequences(index_data, maxlen=self.config.input_length, dtype='int32',
+                                                                     padding='post', truncating='pre', value=0)
+        self.model.fit(x=train_data_i, y=y, batch_size=16, epochs=5, verbose=1, callbacks=None,
                        validation_split=0.1, validation_data=None, shuffle=True, class_weight=None,
                        sample_weight=None, initial_epoch=0, steps_per_epoch=None, validation_steps=None,
                        validation_freq=1, max_queue_size=10, workers=1, use_multiprocessing=False)
         return self
 
     def predict(self, texts):
-        return self.model.predict(self.text_to_id(texts)).flatten()
+        index_data = self.text_to_id(texts)
+        data = tf.keras.preprocessing.sequence.pad_sequences(index_data, maxlen=self.config.input_length, dtype='int32',
+                                                      padding='post', truncating='pre', value=0)
+        return self.model.predict(data).flatten()
 
     @staticmethod
     def _map_func(word, word_dictionary):
@@ -267,8 +277,9 @@ class LSTMClassifier(Classifier):
 
 
 if __name__ == '__main__':
+    from src.data.dataset import Tokenizer
     data = Sentences.read_train_data()
-    DeepModel(word_vector=WordVector(), config=DeepModelConfig()).train(x=data["sentence"], y=data["label"]).evaluate()
+    DeepModel(word_vector=WordVector(), config=DeepModelConfig(), tokenizer=Tokenizer().tokenize).train(x=data["sentence"].values, y=data["label"].values).evaluate()
     # # print(score)
     # FastTextClassifier(self_train_model_path).evaluate()
     # print(FastTextClassifier().get_dirty_word_in_the_model(threshold=0.45))
