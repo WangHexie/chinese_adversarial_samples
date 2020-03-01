@@ -43,6 +43,11 @@ class SOTAAttackConfig:
     word_to_replace: str = '叇'
 
 
+@dataclass
+class DeepModelConfig:
+    input_length:int = 80
+
+
 strong_attack_config = SOTAAttackConfig(num_of_synonyms=20,
                                         threshold_of_stopping_attack=0.00001, tokenize_method=1)
 

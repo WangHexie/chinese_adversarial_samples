@@ -1,12 +1,13 @@
 import math
+from dataclasses import asdict
 from typing import List
 
 import numpy as np
 
-from src.config.configs import SOTAAttackConfig, full_word_tf_idf_config, tencent_embedding_path
+from src.config.configs import SOTAAttackConfig, full_word_tf_idf_config, tencent_embedding_path, TFIDFConfig
 from src.data.dataset import Sentences, Tokenizer
 from src.manipulate.rule_based import ReplaceWithPhonetic, CreateListOfDeformation, InsertPunctuation, PhoneticList
-from src.models.classifier import TFIDFClassifier
+from src.models.classifier import TFIDFClassifier, FastTextClassifier
 from src.predict.word_vector import WordVector
 
 
@@ -25,7 +26,7 @@ class ImportanceBased:
         self.word_vector = word_vector
         self.attack_config = attack_config
         self.tokenizer = tokenizer_selector(method=self.attack_config.tokenize_method)
-        self.stop_word_and_structure_word_list = ["你"]
+        self.stop_word_and_structure_word_list = ["你", "我"] + Sentences.read_stop_words()
 
     def tokenize_text(self, text):
         return self.tokenizer(text)
@@ -45,8 +46,9 @@ class ImportanceBased:
         leave_one_probs = probs[1:]
         importance_score = origin_prob - np.array(leave_one_probs)
         for i in range(len(importance_score)):
-            if text_list[i] in self.stop_word_and_structure_word_list:
-                importance_score[i] = -1
+            for word in self.stop_word_and_structure_word_list:
+                if word in text_list[i]:
+                    importance_score[i] = -1
         return importance_score
 
     def predict_use_classifiers(self, text_list):
@@ -201,18 +203,37 @@ class RemoveImportantWord(ImportanceBased):
 if __name__ == '__main__':
     # print(random_upper_case("what are you takkk"))
     data = Sentences.read_full_data()
-    pr = ReplacementEnsemble([
-        # FastTextClassifier(self_train_model_path),
+    # pr = ReplacementEnsemble([
+    #     # FastTextClassifier(self_train_model_path),
+    #     # TFIDFClassifier(x=data["sentence"], y=data["label"]).train(),
+    #     TFIDFClassifier(tf_idf_config=full_word_tf_idf_config, x=data["sentence"],
+    #                     y=data["label"]).train()
+    # ],
+    #     word_vector=WordVector(tencent_embedding_path),
+    #     attack_config=SOTAAttackConfig(num_of_synonyms=40,
+    #                                    threshold_of_stopping_attack=0.08, tokenize_method=1),
+    #     replacement_classes=[InsertPunctuation(), PhoneticList()]
+    # )
+
+    pr = ImportanceBased([
+        FastTextClassifier(),
+        # FastTextClassifier().train(),
+        # TFIDFEmbeddingClassifier(word_vector=WordVector(tencent_embedding_path), tf_idf_config=full_word_tf_idf_config,
+        # x=data["sentence"],
+        # y=data["label"]).train(),
         # TFIDFClassifier(x=data["sentence"], y=data["label"]).train(),
-        TFIDFClassifier(tf_idf_config=full_word_tf_idf_config, x=data["sentence"],
+        TFIDFClassifier(tf_idf_config=asdict(TFIDFConfig(ngram_range=(1, 3),
+                                                         min_df=0.0005)), x=data["sentence"],
                         y=data["label"]).train()
     ],
-        word_vector=WordVector(tencent_embedding_path),
+        word_vector=WordVector(),
         attack_config=SOTAAttackConfig(num_of_synonyms=40,
-                                       threshold_of_stopping_attack=0.08, tokenize_method=1),
-        replacement_classes=[InsertPunctuation(), PhoneticList()]
+                                       threshold_of_stopping_attack=0.001, tokenize_method=0, word_use_limit=20,
+                                       text_modify_percentage=0.5)
     )
-    data = Sentences.read_insult_data().iloc[:500]
+
+
+    data = Sentences.read_insult_data().iloc[:500].sample(frac=1).reset_index(drop=True)
 
     # print(SimpleDeleteAndReplacement.dirty_character_list)
     # print(SimpleDeleteAndReplacement.dirty_word_list)

@@ -48,7 +48,7 @@ class ReplaceWithSynonyms(RuleBased):
 
 class DeleteDirtyWordFoundByTokenizer(RuleBased):
     def __init__(self):
-        self.full_words = PrepareWords.get_full_bad_words_and_character()
+        self.full_words = PrepareWords.get_dirty_word_in_the_classifier() + PrepareWords.get_full_bad_words_and_character()
 
     def replace(self, sentences):
         dirty_word_list = self.full_words
@@ -80,7 +80,7 @@ class DeleteDirtyWordFoundByNGram(RuleBased):
 class ReplaceWithPhonetic(RuleBased):
     def __init__(self):
         self.common_word = Sentences.read_common_words()
-        self.full_word = PrepareWords.get_full_bad_words_and_character()
+        self.full_word = PrepareWords.get_dirty_word_in_the_classifier() + PrepareWords.get_full_bad_words_and_character() + PrepareWords.get_full_dirty_word_list_by_ngram(1000)
 
     def _find_sound_like_word(self, word_to_replace, random_limit):
         """

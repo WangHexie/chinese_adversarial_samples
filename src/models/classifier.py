@@ -3,12 +3,14 @@ import os
 
 import fasttext
 import numpy as np
+import tensorflow as tf
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
+from sklearn.svm import SVC
 
 from src.config.configs import tencent_embedding_path, self_train_test_data_path, single_character_tf_idf_config, \
-    strong_attack_config, self_train_model_path, self_train_train_data_path
+    strong_attack_config, self_train_model_path, self_train_train_data_path, DeepModelConfig
 from src.data.basic_functions import root_dir
 from src.data.dataset import Sentences
 from src.predict.word_vector import WordVector
@@ -21,7 +23,7 @@ class Classifier:
         return self
 
     @abc.abstractmethod
-    def train(self):
+    def train(self, x=None, y=None):
         print("error")
         return self
 
@@ -64,7 +66,7 @@ class FastTextClassifier(Classifier):
         self.model = model
         return self
 
-    def train(self):
+    def train(self, x=None, y=None):
         try:
             self.model = fasttext.train_supervised(self_train_train_data_path,
                                                    dim=200,
@@ -84,6 +86,15 @@ class FastTextClassifier(Classifier):
 
     def save_model(self):
         self.model.save_model(self_train_model_path)
+
+    def get_dirty_word_in_the_model(self, threshold=0.5):
+        words = np.array(self.model.get_words())
+        scores = np.array(self.predict(list(words)))
+        scores_index = scores.argsort()[::-1]
+        scores = scores[scores_index]
+        words = words[scores_index]
+        is_dirty = np.array(scores > threshold)
+        return list(words[is_dirty])
 
     @staticmethod
     def _modify_predict_result(predictions):
@@ -114,7 +125,7 @@ class TFIDFClassifier(Classifier):
         self.x = x
         self.y = y
         self.vectorizer: TfidfVectorizer = None
-        self.classifier: LogisticRegression = None
+        self.classifier = None
 
     @staticmethod
     def train_tf_idf_features(text, tf_idf_config):
@@ -129,7 +140,7 @@ class TFIDFClassifier(Classifier):
     def predict(self, texts):
         return self.classifier.predict_proba(self.transform_text_to_vector(texts))[:, 1]
 
-    def train(self):
+    def train(self, x=None, y=None):
         self.vectorizer = self.train_tf_idf_features(self.x, self.tf_idf_config)
         vectors = self.transform_text_to_vector(self.x)
         clf = LogisticRegression(random_state=0).fit(vectors, self.y)
@@ -138,6 +149,75 @@ class TFIDFClassifier(Classifier):
 
     def load_model(self):
         pass
+
+
+class DeepModel(Classifier):
+    def __init__(self, word_vector: WordVector, tokenizer: callable, config: DeepModelConfig):
+        self.word_vector = word_vector
+        self.tokenizer = tokenizer
+        self.config = config
+        self.model = None
+
+    def create_model(self):
+        model = tf.keras.Sequential()
+        input_embedding_layer = tf.keras.layers.Embedding(self.word_vector.vector.vectors.shape[0],
+                                                          self.word_vector.vector.vectors.shape[1],
+                                                          embeddings_initializer='uniform', embeddings_regularizer=None,
+                                                          activity_regularizer=None, embeddings_constraint=None,
+                                                          mask_zero=False, input_length=self.config.input_length)
+        model.add(input_embedding_layer)
+        input_embedding_layer.set_weights([self.word_vector.vector.vectors])
+        input_embedding_layer.trainable = False
+        model.add(tf.keras.layers.Conv1D(16, 4, activation='relu'))
+        model.add(tf.keras.layers.MaxPooling1D(pool_size=4, strides=None, padding='valid', data_format='channels_last'))
+        model.add(tf.keras.layers.Conv1D(16, 4, activation='relu'))
+        model.add(tf.keras.layers.MaxPooling1D(pool_size=4, strides=None, padding='valid', data_format='channels_last'))
+        model.add(tf.keras.layers.Flatten())
+        model.add(tf.keras.layers.Dense(1))
+        model.summary()
+        model.compile(optimizer='adam',
+                      loss=tf.keras.losses.BinaryCrossentropy(from_logits=True),
+                      metrics=['accuracy'])
+        self.model = model
+        return self
+
+    def save_model(self):
+        pass
+
+    def load_model(self):
+        pass
+
+    def train(self, x=None, y=None):
+        index_data = self.text_to_id(x)
+        self.model.fit(x=index_data, y=y, batch_size=16, epochs=5, verbose=1, callbacks=None,
+                       validation_split=0.1, validation_data=None, shuffle=True, class_weight=None,
+                       sample_weight=None, initial_epoch=0, steps_per_epoch=None, validation_steps=None,
+                       validation_freq=1, max_queue_size=10, workers=1, use_multiprocessing=False)
+        return self
+
+    def predict(self, texts):
+        return self.model.predict(self.text_to_id(texts)).flatten()
+
+    @staticmethod
+    def _map_func(word, word_dictionary):
+        try:
+            return word_dictionary[word]
+        except KeyError:
+            return 0
+
+    def text_to_id(self, sentences):
+        return self._transform_sentences_to_id(sentences, self.word_vector.vector.vocab.keys(), self.tokenizer)
+
+    @staticmethod
+    def _transform_sentences_to_id(sentences, word_list, tokenizer_function):
+
+        word_dictionary = dict(zip(word_list, range(len(word_list))))
+
+        result = []
+        for sentence in sentences:
+            tokenized_sentence = tokenizer_function(sentence)
+            result.append(list(map(lambda x: DeepModel._map_func(x, word_dictionary), tokenized_sentence)))
+        return result
 
 
 class TFIDFEmbeddingClassifier(TFIDFClassifier):
@@ -165,12 +245,21 @@ class TFIDFEmbeddingClassifier(TFIDFClassifier):
         return np.vstack(final_vectors)
 
 
+class EmbeddingSVM(TFIDFEmbeddingClassifier):
+    def train(self, x=None, y=None):
+        self.vectorizer = self.train_tf_idf_features(self.x, self.tf_idf_config)
+        vectors = self.transform_text_to_vector(self.x)
+        clf = SVC(random_state=0, probability=True).fit(vectors, self.y)
+        self.classifier = clf
+        return self
+
+
 class LSTMClassifier(Classifier):
 
-    def load_model(self):
+    def train(self, x=None, y=None):
         pass
 
-    def train(self):
+    def load_model(self):
         pass
 
     def predict(self, texts):
@@ -178,8 +267,8 @@ class LSTMClassifier(Classifier):
 
 
 if __name__ == '__main__':
-    # data = Sentences.read_train_data()
-    # TFIDFEmbeddingClassifier(word_vector=WordVector(), x=data["sentence"], y=data["label"]).train().evaluate()
+    data = Sentences.read_train_data()
+    DeepModel(word_vector=WordVector(), config=DeepModelConfig()).train(x=data["sentence"], y=data["label"]).evaluate()
     # # print(score)
     # FastTextClassifier(self_train_model_path).evaluate()
-    FastTextClassifier().train().save_model()
+    # print(FastTextClassifier().get_dirty_word_in_the_model(threshold=0.45))

@@ -197,6 +197,13 @@ class Sentences:
 
         return Sentences.__remove_emoji(words.replace('\n', '').replace(' ', ''))
 
+    @staticmethod
+    def read_stop_words():
+        with open(os.path.join(root_dir(), "data", "stop_word.txt"), "r", encoding="utf-8") as f:
+            words = f.read()
+
+        return list(words.split('\n'))
+
 
 class Tokenizer:
     def __init__(self):
@@ -211,7 +218,7 @@ class Tokenizer:
 
 if __name__ == '__main__':
     # data = Sentences.read_full_data(ignore_indirect_data=False)
-    Sentences().save_train_data()
+    print(Sentences().read_stop_words())
     # print(Sentences().save_train_data(-1))
     # print(Sentences.read_common_words())
     # print(Sentences.read_similar_word())

@@ -77,6 +77,10 @@ class PrepareWords:
         return InspectFeatures(single_character_tf_idf_config).locate_top_dirty_character(number_of_characters)
 
     @staticmethod
+    def get_full_dirty_word_list_by_ngram(number_of_characters=1000):
+        return InspectFeatures(full_tokenizer_word_tf_idf_config).locate_top_dirty_character(number_of_characters)
+
+    @staticmethod
     def get_dirty_word_list(number_of_characters=1000, classifier_threshold=0.1):
         return InspectFeatures.is_dirty_by_classifier(FastTextClassifier(),
                                                       InspectFeatures(
@@ -94,6 +98,11 @@ class PrepareWords:
         return InspectFeatures(full_word_tf_idf_config, number_of_positive_data=-1).locate_top_dirty_character(
             number_of_characters)
 
+    @staticmethod
+    def get_dirty_word_in_the_classifier(threshold=0.45):
+        return FastTextClassifier().get_dirty_word_in_the_model(threshold=threshold)
+
 
 if __name__ == '__main__':
-    print(InspectFeatures(full_word_tf_idf_config, number_of_positive_data=-1).locate_top_dirty_character(800))
+    # print(InspectFeatures(full_word_tf_idf_config, number_of_positive_data=-1).locate_top_dirty_character(800))
+    print(len(PrepareWords.get_dirty_word_in_the_classifier()))
