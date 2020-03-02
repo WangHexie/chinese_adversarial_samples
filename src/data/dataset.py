@@ -4,6 +4,7 @@ import pickle
 import re
 from typing import List
 
+import jieba
 import numpy as np
 import pandas as pd
 import pkuseg
@@ -157,7 +158,7 @@ class Sentences:
 
         return full_data.drop_duplicates(subset="sentence").reset_index()
 
-    def save_train_data(self, num_of_positive="auto", test_data_size = 0.4):
+    def save_train_data(self, num_of_positive="auto", test_data_size=0.4):
         data = self.read_full_data(num_of_positive=num_of_positive, ignore_indirect_data=True)[["label", "sentence"]]
         data['label'] = data['label'].map(lambda x: "__label__" + str(x))
         data['sentence'] = data['sentence'].astype('str')
@@ -204,6 +205,20 @@ class Sentences:
 
         return list(words.split('\n'))
 
+    @staticmethod
+    def read_positive_word():
+        test_data = pd.read_csv(os.path.join(root_dir(), "data", "positive_dict.txt"), names=[ "sentence", "label"], index_col=False, encoding="utf-8", sep='[ \t]+')
+        return test_data["sentence"].values.tolist()
+
+    @staticmethod
+    def get_word_pos_neg_data():
+        from src.features.identify_importance_word import PrepareWords
+        from src.manipulate.rule_based import ReplaceWithPhonetic
+
+        positive_data = Sentences.read_positive_word() + PrepareWords.get_good_word_and_character_list()
+        negative_data = PrepareWords.get_full_dirty_without_stop_word()
+        return [positive_data+negative_data, np.zeros(len(positive_data)).tolist()+np.ones(len(negative_data)).tolist()]
+
 
 class Tokenizer:
     def __init__(self):
@@ -216,9 +231,15 @@ class Tokenizer:
         return self.seg.cut(text)
 
 
+class Jieba(Tokenizer):
+    def tokenize(self, text):
+        return list(jieba.cut(text))
+
+
 if __name__ == '__main__':
     # data = Sentences.read_full_data(ignore_indirect_data=False)
-    print(Sentences().read_stop_words())
+    print(Sentences.get_word_pos_neg_data())
+    # print(Sentences().read_stop_words())
     # print(Sentences().save_train_data(-1))
     # print(Sentences.read_common_words())
     # print(Sentences.read_similar_word())

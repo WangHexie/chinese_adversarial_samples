@@ -1,14 +1,17 @@
+import os
+import random
 from dataclasses import asdict
 
 import numpy as np
 
-from src.config.configs import SOTAAttackConfig, TFIDFConfig, full_word_tf_idf_config, self_train_model_path
-from src.data.dataset import Sentences
+from src.config.configs import SOTAAttackConfig, TFIDFConfig, full_word_tf_idf_config, self_train_model_path, \
+    DeepModelConfig
+from src.data.dataset import Sentences, Tokenizer
 from src.data.measure_distance import DistanceCalculator
 from src.manipulate.importance_based import ReplacementEnsemble
 from src.manipulate.rule_based import DeleteDirtyWordFoundByTokenizer, \
-    ListOfSynonyms
-from src.models.classifier import FastTextClassifier, TFIDFClassifier, EmbeddingSVM
+    ListOfSynonyms, RandomAppendGoodWords
+from src.models.classifier import FastTextClassifier, TFIDFClassifier, EmbeddingSVM, DeepModel
 from src.predict.word_vector import WordVector
 
 
@@ -93,31 +96,51 @@ def self_defined_function(manipulate_func: callable):
 
 
 if __name__ == '__main__':
-    data = Sentences.read_train_data()
+    # data = Sentences.read_train_data()
 
-    config = SOTAAttackConfig(num_of_synonyms=40,
-                              threshold_of_stopping_attack=0.001, tokenize_method=0, word_use_limit=20,
-                              text_modify_percentage=0.35)
+    # config = SOTAAttackConfig(num_of_synonyms=40,
+    #                           threshold_of_stopping_attack=0.001, tokenize_method=0, word_use_limit=20,
+    #                           text_modify_percentage=0.35)
+    #
+    # pr = ReplacementEnsemble([
+    #     FastTextClassifier(),
+    #     EmbeddingSVM(x=data["sentence"],
+    #                  y=data["label"], word_vector=WordVector()).train(),
+    #     # FastTextClassifier().train(),
+    #     # TFIDFEmbeddingClassifier(word_vector=WordVector(tencent_embedding_path), tf_idf_config=full_word_tf_idf_config,
+    #     # x=data["sentence"],
+    #     # y=data["label"]).train(),
+    #     # TFIDFClassifier(x=data["sentence"], y=data["label"]).train(),
+    #     TFIDFClassifier(tf_idf_config=asdict(TFIDFConfig(ngram_range=(1, 3),
+    #                                                      min_df=0.0005)), x=data["sentence"],
+    #                     y=data["label"]).train()
+    # ],
+    #     word_vector=WordVector(),
+    #     attack_config=config,
+    #     replacement_classes=[ListOfSynonyms(word_vector=WordVector(), attack_config=config)]
+    # )
+    # config = SOTAAttackConfig(num_of_synonyms=40,
+    #                           threshold_of_stopping_attack=0.001, tokenize_method=1, word_use_limit=20,
+    #                           text_modify_percentage=0.50)
+    #
+    # os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+    #
+    # pr = ReplacementEnsemble([
+    #     DeepModel(word_vector=WordVector(), config=DeepModelConfig(), tokenizer=Tokenizer().tokenize).train(
+    #         x=data["sentence"].values, y=data["label"].values)
+    # ],
+    #     word_vector=WordVector(),
+    #     attack_config=config,
+    #     replacement_classes=[ListOfSynonyms(word_vector=WordVector(), attack_config=config)]
+    # )
+    p = RandomAppendGoodWords(number_to_append=2.5)
 
-    pr = ReplacementEnsemble([
-        FastTextClassifier(),
-        EmbeddingSVM(x=data["sentence"],
-                     y=data["label"], word_vector=WordVector()).train(),
-        # FastTextClassifier().train(),
-        # TFIDFEmbeddingClassifier(word_vector=WordVector(tencent_embedding_path), tf_idf_config=full_word_tf_idf_config,
-        # x=data["sentence"],
-        # y=data["label"]).train(),
-        # TFIDFClassifier(x=data["sentence"], y=data["label"]).train(),
-        TFIDFClassifier(tf_idf_config=asdict(TFIDFConfig(ngram_range=(1, 3),
-                                                         min_df=0.0005)), x=data["sentence"],
-                        y=data["label"]).train()
-    ],
-        word_vector=WordVector(),
-        attack_config=config,
-        replacement_classes=[ListOfSynonyms(word_vector=WordVector(), attack_config=config)]
-    )
+    func = DeleteDirtyWordFoundByTokenizer()
 
-    self_defined_function(pr.craft_one_adversarial_sample)
+
+    def repp(string):
+        return p.replace(func.replace(string))
+    self_defined_function(repp)
     # ListOfSynonyms(word_vector=WordVector(), attack_config=SOTAAttackConfig(num_of_synonyms=40,
     #                                                                         threshold_of_stopping_attack=0.001,
     #                                                                         tokenize_method=1,

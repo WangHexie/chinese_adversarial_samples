@@ -13,6 +13,7 @@ from src.config.configs import tencent_embedding_path, self_train_test_data_path
     strong_attack_config, self_train_model_path, self_train_train_data_path, DeepModelConfig, deep_model_path
 from src.data.basic_functions import root_dir
 from src.data.dataset import Sentences
+from src.models.textcnn import TextCNN
 from src.predict.word_vector import WordVector
 
 
@@ -155,34 +156,21 @@ class TFIDFClassifier(Classifier):
 
 
 class DeepModel(Classifier):
-    def __init__(self, word_vector: WordVector, tokenizer: callable, config: DeepModelConfig):
+    def __init__(self, word_vector: WordVector, tokenizer: callable, config: DeepModelConfig, model_creator):
         self.word_vector = word_vector
         self.tokenizer = tokenizer
         self.config = config
         self.model = None
+        self.model_creator = model_creator
 
     def create_model(self):
-        model = tf.keras.Sequential()
-        input_embedding_layer = tf.keras.layers.Embedding(self.word_vector.vector.vectors.shape[0],
-                                                          self.word_vector.vector.vectors.shape[1],
-                                                          embeddings_initializer='uniform', embeddings_regularizer=None,
-                                                          activity_regularizer=None, embeddings_constraint=None,
-                                                          mask_zero=False, input_length=self.config.input_length)
-        model.add(input_embedding_layer)
-        input_embedding_layer.set_weights([self.word_vector.vector.vectors])
-        input_embedding_layer.trainable = False
-        model.add(tf.keras.layers.Conv1D(16, 4, activation='relu'))
-        model.add(tf.keras.layers.MaxPooling1D(pool_size=4, strides=None, padding='valid', data_format='channels_last'))
-        model.add(tf.keras.layers.Conv1D(16, 4, activation='relu'))
-        model.add(tf.keras.layers.MaxPooling1D(pool_size=4, strides=None, padding='valid', data_format='channels_last'))
-        model.add(tf.keras.layers.Flatten())
-        model.add(tf.keras.layers.Dense(1))
-        model.summary()
-        model.compile(optimizer='adam',
-                      loss="mean_squared_error",
-                      metrics=['accuracy'])
-        self.model = model
+        self.model = self.model_creator(self.config.input_length, self.word_vector.vector.vectors.shape[0], self.word_vector.vector.vectors.shape[1], embedding_matrix=self.word_vector.vector.vectors)
+        self.model.compile('adam', 'mean_absolute_error', metrics=['accuracy'])
+
         return self
+
+    def get_embedding_and_middle_layers(self):
+        return self.model.export_middle_layers()
 
     def save_model(self):
         self.model.save(deep_model_path)
@@ -209,7 +197,7 @@ class DeepModel(Classifier):
         return self.model.predict(data).flatten()
 
     @staticmethod
-    def _map_func(word, word_dictionary):
+    def map_func(word, word_dictionary):
         try:
             return word_dictionary[word]
         except KeyError:
@@ -217,6 +205,9 @@ class DeepModel(Classifier):
 
     def text_to_id(self, sentences):
         return self._transform_sentences_to_id(sentences, self.word_vector.vector.vocab.keys(), self.tokenizer)
+
+    def get_dictionary(self):
+        return dict(zip(self.word_vector.vector.vocab.keys(), range(len(self.word_vector.vector.vocab.keys()))))
 
     @staticmethod
     def _transform_sentences_to_id(sentences, word_list, tokenizer_function):
@@ -226,7 +217,7 @@ class DeepModel(Classifier):
         result = []
         for sentence in sentences:
             tokenized_sentence = tokenizer_function(sentence)
-            result.append(list(map(lambda x: DeepModel._map_func(x, word_dictionary), tokenized_sentence)))
+            result.append(list(map(lambda x: DeepModel.map_func(x, word_dictionary), tokenized_sentence)))
         return result
 
 

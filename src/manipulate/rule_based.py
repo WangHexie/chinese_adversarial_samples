@@ -4,8 +4,9 @@ import random
 import numpy as np
 from pypinyin import lazy_pinyin
 
+from src.config.configs import tencent_embedding_path, full_word_tf_idf_config
 from src.data.dataset import Sentences
-from src.features.identify_importance_word import PrepareWords
+from src.features.identify_importance_word import PrepareWords, FindDirtyWordInEmbedding
 from src.predict.word_vector import WordVector
 
 
@@ -80,7 +81,8 @@ class DeleteDirtyWordFoundByNGram(RuleBased):
 class ReplaceWithPhonetic(RuleBased):
     def __init__(self):
         self.common_word = Sentences.read_common_words()
-        self.full_word = PrepareWords.get_dirty_word_in_the_classifier() + PrepareWords.get_full_bad_words_and_character() + PrepareWords.get_full_dirty_word_list_by_ngram(1000)
+        self.full_word = PrepareWords.get_dirty_word_in_the_classifier() + PrepareWords.get_full_bad_words_and_character() + PrepareWords.get_full_dirty_word_list_by_ngram(
+            1000)
 
     def _find_sound_like_word(self, word_to_replace, random_limit):
         """
@@ -126,7 +128,33 @@ class ReplaceWithPhonetic(RuleBased):
         return sentences
 
 
-class RandomAppendGoodWords(RuleBased):
+class ReplaceWithPhoneticNoSpecialWord(ReplaceWithPhonetic):
+    def __init__(self):
+        super().__init__()
+        self.special_word = Sentences.read_stop_words()
+        self.full_word = self.full_word + list(FindDirtyWordInEmbedding(WordVector(tencent_embedding_path),
+                                                                        config=full_word_tf_idf_config).get_all_dirty_word_in_embedding())
+
+    def replace(self, sentences):
+        random_limit = 10
+
+        dirty_word_list = self.full_word
+
+        for word in dirty_word_list:
+
+            word_to_replace = random.choice(word)
+            try:
+
+                similar_word = self._find_sound_like_word(word_to_replace, random_limit)
+
+                sentences = sentences.replace(word, word.replace(word_to_replace, similar_word))
+
+            except ValueError:
+                continue
+        return sentences
+
+
+class RandomAppendGoodWordsInTheSentence(RuleBased):
     def __init__(self, number_to_append=0.99):
         self.number_to_append = number_to_append
         self.good_word_and_character_list = PrepareWords.get_good_word_and_character_list()
@@ -150,6 +178,25 @@ class RandomAppendGoodWords(RuleBased):
         return sentences
 
 
+class RandomAppendGoodWords(RuleBased):
+    def __init__(self, number_to_append=0.99):
+        self.number_to_append = number_to_append
+        self.good_word_and_character_list = Sentences.read_positive_word()
+
+    def replace(self, sentences):
+        good_word_and_character = self.good_word_and_character_list
+        count = 0
+        if type(self.number_to_append) == float:
+            number_to_append = int(self.number_to_append * len(sentences))
+        else:
+            number_to_append = self.number_to_append
+
+        for i in range(number_to_append):
+            sentences = sentences + " " + random.choice(good_word_and_character)
+
+        return sentences
+
+
 class CreateListOfDeformation:
     @abc.abstractmethod
     def add_word_use(self, word, limitation):
@@ -167,7 +214,8 @@ class DeleteAFewCharacters(CreateListOfDeformation):
 
     def create(self, sentence):
         # TODO: bug warning. output number is wrong
-        return [sentence.replace(sentence[start_index:start_index+keep_length], '') for start_index in range(len(sentence)) for keep_length in range(len(sentence) - start_index) ]
+        return [sentence.replace(sentence[start_index:start_index + keep_length], '') for start_index in
+                range(len(sentence)) for keep_length in range(len(sentence) - start_index)]
 
 
 class ListOfSynonyms(CreateListOfDeformation):
@@ -278,4 +326,5 @@ class SimpleDeleteAndReplacement:
 
 
 if __name__ == '__main__':
-    print(DeleteAFewCharacters().create("你说什么？？？"))
+    # print(DeleteAFewCharacters().create("你说什么？？？"))
+    print(ReplaceWithPhoneticNoSpecialWord().full_word)

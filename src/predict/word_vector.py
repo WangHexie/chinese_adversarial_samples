@@ -8,10 +8,10 @@ import numpy as np
 
 
 class WordVector:
-    def __init__(self, path=os.path.join(root_dir(), "models", "zh.300.vec.gz")):
+    def __init__(self, path=os.path.join(root_dir(), "models", "zh.300.vec.gz"), number_of_word_to_load=300000):
         self.path = path
         self.vector = None
-        self.load_model()
+        self.load_model(number_of_word_to_load)
 
         self.word_count = dict()
         self.word_filter = []
@@ -23,8 +23,8 @@ class WordVector:
     def _update_cache(self, word, topn, syns):
             self.cache[word+str(topn)] = syns
 
-    def load_model(self):
-        self.vector = KeyedVectors.load_word2vec_format(self.path, limit=50000)
+    def load_model(self, number_of_word_to_load):
+        self.vector = KeyedVectors.load_word2vec_format(self.path, limit=number_of_word_to_load)
         return self
 
     @staticmethod
