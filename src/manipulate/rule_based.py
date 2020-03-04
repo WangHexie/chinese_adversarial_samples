@@ -27,7 +27,7 @@ class ReplaceWithSynonyms(RuleBased):
         self.random_limit = 10
         self.use_limit = 20  # TODO: not enabled now
 
-        self.special_word = "你"  # TODO: enable special word function
+        self.special_word = "你"  # TODO: done by
 
     def replace(self, sentences):
 
@@ -134,6 +134,7 @@ class ReplaceWithPhoneticNoSpecialWord(ReplaceWithPhonetic):
         self.special_word = Sentences.read_stop_words()
         self.full_word = self.full_word + list(FindDirtyWordInEmbedding(WordVector(tencent_embedding_path),
                                                                         config=full_word_tf_idf_config).get_all_dirty_word_in_embedding())
+        self.full_word = PrepareWords.delete_stop_word_in_special_word(self.full_word, Sentences.read_stop_words())
 
     def replace(self, sentences):
         random_limit = 10
@@ -185,7 +186,6 @@ class RandomAppendGoodWords(RuleBased):
 
     def replace(self, sentences):
         good_word_and_character = self.good_word_and_character_list
-        count = 0
         if type(self.number_to_append) == float:
             number_to_append = int(self.number_to_append * len(sentences))
         else:
@@ -213,7 +213,7 @@ class DeleteAFewCharacters(CreateListOfDeformation):
         pass
 
     def create(self, sentence):
-        # TODO: bug warning. output number is wrong
+        # TODO: bug warning. output number is wrong. design!
         return [sentence.replace(sentence[start_index:start_index + keep_length], '') for start_index in
                 range(len(sentence)) for keep_length in range(len(sentence) - start_index)]
 

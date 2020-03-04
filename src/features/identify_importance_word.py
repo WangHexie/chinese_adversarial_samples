@@ -183,5 +183,7 @@ class FGSM(ImportanceJudgement):
 if __name__ == '__main__':
     # print(InspectFeatures(full_word_tf_idf_config, number_of_positive_data=-1).locate_top_dirty_character(800))
     # print(len(PrepareWords.get_dirty_word_in_the_classifier()))
-    print(FindDirtyWordInEmbedding(WordVector(tencent_embedding_path),
-                                   config=full_word_tf_idf_config).get_all_dirty_word_in_embedding())
+    words = FindDirtyWordInEmbedding(WordVector(),
+                                   config=full_word_tf_idf_config).get_all_dirty_word_in_embedding()
+    print(words)
+    print(len(words))

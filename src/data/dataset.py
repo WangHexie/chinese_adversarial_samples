@@ -208,7 +208,13 @@ class Sentences:
     @staticmethod
     def read_positive_word():
         test_data = pd.read_csv(os.path.join(root_dir(), "data", "positive_dict.txt"), names=[ "sentence", "label"], index_col=False, encoding="utf-8", sep='[ \t]+')
-        return test_data["sentence"].values.tolist()
+        return list(set(test_data["sentence"].values.tolist() + Sentences._read_long_positive_word()))
+
+    @staticmethod
+    def _read_long_positive_word():
+        with open(os.path.join(root_dir(), "data", "MoodNice.txt"), "r", encoding="utf-8") as f:
+            words = f.read()
+        return words.split("\n")
 
     @staticmethod
     def get_word_pos_neg_data():

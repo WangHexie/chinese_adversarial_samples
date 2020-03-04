@@ -13,7 +13,7 @@ class SimpleCnn(Model):
         model = tf.keras.Sequential()
         self.input_embedding_layer = tf.keras.layers.Embedding(max_features,
                                                                embedding_dims,
-                                                               weights = [embedding_matrix],
+                                                               weights=[embedding_matrix],
                                                                embeddings_initializer='uniform',
                                                                embeddings_regularizer=None,
                                                                activity_regularizer=None, embeddings_constraint=None,
@@ -51,3 +51,25 @@ class SimpleCnn(Model):
 class SimpleRNN(SimpleCnn):
     def __init__(self, maxlen, max_features, embedding_dims, embedding_matrix, *args, **kwargs):
         super().__init__(maxlen, max_features, embedding_dims, embedding_matrix, *args, **kwargs)
+        self.maxlen = maxlen
+        self.max_features = max_features
+        self.embedding_dims = embedding_dims
+        model = tf.keras.Sequential()
+        self.input_embedding_layer = tf.keras.layers.Embedding(max_features,
+                                                               embedding_dims,
+                                                               weights=[embedding_matrix],
+                                                               embeddings_initializer='uniform',
+                                                               embeddings_regularizer=None,
+                                                               activity_regularizer=None, embeddings_constraint=None,
+                                                               mask_zero=False, input_length=maxlen)
+        model.add(self.input_embedding_layer)
+        # self.input_embedding_layer.set_weights([self.word_vector.vector.vectors])
+        self.input_embedding_layer.trainable = False
+        model.add(tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(96, activation='relu')))
+        model.add(tf.keras.layers.Flatten())
+        model.add(tf.keras.layers.Dense(1))
+        model.summary()
+        model.compile(optimizer='adam',
+                      loss="mean_absolute_error",
+                      metrics=['accuracy'])
+        self.model = model

@@ -10,9 +10,10 @@ from src.config.configs import SOTAAttackConfig, full_word_tf_idf_config, tencen
     DeepModelConfig
 from src.data.dataset import Sentences, Tokenizer, Jieba
 from src.features.identify_importance_word import ImportanceJudgement, FGSM
-from src.manipulate.rule_based import ReplaceWithPhonetic, CreateListOfDeformation, InsertPunctuation, PhoneticList
+from src.manipulate.rule_based import ReplaceWithPhonetic, CreateListOfDeformation, InsertPunctuation, PhoneticList, \
+    ListOfSynonyms
 from src.models.classifier import TFIDFClassifier, FastTextClassifier, DeepModel
-from src.models.deep_model import SimpleCnn
+from src.models.deep_model import SimpleCnn, SimpleRNN
 from src.predict.word_vector import WordVector
 
 
@@ -40,6 +41,23 @@ class ImportanceBased:
         return self.tokenizer(text)
 
     def _identify_important_word(self, text_list, word_to_replace='叇'):
+        importance_score = np.mean([self._delete_or_replace_score(text_list, word_to_replace='叇'),
+                                    self._temporal_head_score(text_list),
+                                    self._temporal_tail_score(text_list)],  axis=0)
+
+        for i in range(len(importance_score)):
+            for word in self.stop_word_and_structure_word_list:
+                if word in text_list[i]:
+                    importance_score[i] = -1
+
+        important_word_index = np.argsort(importance_score)[::-1]
+        important_word_index = important_word_index[importance_score[important_word_index] > 0]
+        return important_word_index
+
+    def predict_use_classifiers(self, text_list):
+        return np.mean([classifier.predict(text_list) for classifier in self.classifiers], axis=0)
+
+    def _delete_or_replace_score(self, text_list, word_to_replace='叇'):
         leave_one_text_list = ["".join(text_list)]
 
         for i in range(len(text_list)):
@@ -53,22 +71,28 @@ class ImportanceBased:
         origin_prob = probs[0]
         leave_one_probs = probs[1:]
         importance_score = origin_prob - np.array(leave_one_probs)
-        for i in range(len(importance_score)):
-            for word in self.stop_word_and_structure_word_list:
-                if word in text_list[i]:
-                    importance_score[i] = -1
-
-        important_word_index = np.argsort(importance_score)[::-1]
-        important_word_index = important_word_index[importance_score[important_word_index] > 0]
-        return important_word_index
-
-    def predict_use_classifiers(self, text_list):
-        return np.mean([classifier.predict(text_list) for classifier in self.classifiers], axis=0)
+        return list(importance_score)
 
     def _temporal_head_score(self, text_list):
-        # TODO: importance score not finished
         top_n = [''.join(text_list[:i + 1]) for i in range(len(text_list))]
         probs = self.predict_use_classifiers(top_n)
+
+        rear_n = list(probs)
+        rear_n.insert(0, 0)
+        rear_n.pop(-1)
+
+        return list(np.array(probs) - np.array(rear_n))
+
+    def _temporal_tail_score(self, text_list):
+        top_n = [''.join(text_list[i:-1]) for i in range(len(text_list))]
+        probs = self.predict_use_classifiers(top_n)
+
+        rear_n = list(probs)
+        rear_n.pop(0)
+        rear_n.insert(-1, 0)
+
+        return list(np.array(probs) - np.array(rear_n))
+
 
     def _replace_text_and_predict(self, text_tokens, synonyms, index):
         sentences = []
@@ -145,7 +169,6 @@ class ImportanceBased:
             synonyms = self._find_synonyms_or_others_words(tokenized_text[index_of_word_to_replace])
 
             if len(synonyms) == 0:
-                # TODO: modification single word
                 continue
             # replace and predict
             scores = self._replace_text_and_predict(tokenized_text, synonyms, index_of_word_to_replace)
@@ -167,9 +190,11 @@ class ReplacementEnsemble(ImportanceBased):
                  classifiers,
                  word_vector: WordVector,
                  attack_config: SOTAAttackConfig,
-                 replacement_classes: List[CreateListOfDeformation]):
+                 replacement_classes: List[CreateListOfDeformation],
+                 classifier_coefficient: List = None):
         super().__init__(classifiers, word_vector, attack_config)
         self.replacement_classes = replacement_classes
+        self.classifier_coefficient = classifier_coefficient
 
     def _replace_with_synonym(self, text_token, index_to_replace, synonyms, index_of_synonyms):
         if index_of_synonyms is None:
@@ -184,6 +209,17 @@ class ReplacementEnsemble(ImportanceBased):
         for r in self.replacement_classes:
             result += r.create(word)
         return result
+
+    def predict_use_classifiers(self, text_list):
+        if self.classifier_coefficient is None:
+            return np.mean([classifier.predict(text_list) for classifier in self.classifiers], axis=0)
+        else:
+            result = []
+            for i in range(len(self.classifiers)):
+                scores = (np.array(self.classifiers[i].predict(text_list)) - 0.5) * self.classifier_coefficient[i]
+                result.append(scores)
+
+            return np.mean(result, axis=0) + 0.5
 
 
 class DeepImportanceScore(ReplacementEnsemble):
@@ -250,22 +286,36 @@ class RemoveImportantWord(ImportanceBased):
 if __name__ == '__main__':
     # print(random_upper_case("what are you takkk"))
     # data = Sentences.read_full_data()
-    os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
-
+    # os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+    #
+    # data = Sentences.read_train_data()
+    # dm = DeepModel(word_vector=WordVector(), config=DeepModelConfig(), tokenizer=Tokenizer().tokenize,
+    #                model_creator=SimpleCnn).train(x=data["sentence"].values, y=data["label"].values)
+    # pr = DeepImportanceScore([
+    #     FastTextClassifier(),
+    #     # TFIDFClassifier(x=data["sentence"], y=data["label"]).train(),
+    #     # TFIDFClassifier(tf_idf_config=full_word_tf_idf_config, x=data["sentence"],
+    #     #                 y=data["label"]).train()
+    # ],
+    #     word_vector=WordVector(tencent_embedding_path),
+    #     attack_config=SOTAAttackConfig(num_of_synonyms=40,
+    #                                    threshold_of_stopping_attack=0.08, tokenize_method=1),
+    #     replacement_classes=[InsertPunctuation(), PhoneticList()],
+    #     importance_judgement=FGSM(*dm.get_embedding_and_middle_layers(), dm.get_dictionary(), dm.config.input_length)
+    # )
     data = Sentences.read_train_data()
-    dm = DeepModel(word_vector=WordVector(), config=DeepModelConfig(), tokenizer=Tokenizer().tokenize,
-                   model_creator=SimpleCnn).train(x=data["sentence"].values, y=data["label"].values)
-    pr = DeepImportanceScore([
-        FastTextClassifier(),
-        # TFIDFClassifier(x=data["sentence"], y=data["label"]).train(),
-        # TFIDFClassifier(tf_idf_config=full_word_tf_idf_config, x=data["sentence"],
-        #                 y=data["label"]).train()
+
+    config = SOTAAttackConfig(num_of_synonyms=40,
+                              threshold_of_stopping_attack=0.001, tokenize_method=1, word_use_limit=20,
+                              text_modify_percentage=0.50)
+
+    pr = ReplacementEnsemble([
+        DeepModel(word_vector=WordVector(), config=DeepModelConfig(), tokenizer=list, model_creator=SimpleRNN).train(
+            x=data["sentence"].values, y=data["label"].values)
     ],
-        word_vector=WordVector(tencent_embedding_path),
-        attack_config=SOTAAttackConfig(num_of_synonyms=40,
-                                       threshold_of_stopping_attack=0.08, tokenize_method=1),
-        replacement_classes=[InsertPunctuation(), PhoneticList()],
-        importance_judgement=FGSM(*dm.get_embedding_and_middle_layers(), dm.get_dictionary(), dm.config.input_length)
+        word_vector=WordVector(),
+        attack_config=config,
+        replacement_classes=[ListOfSynonyms(word_vector=WordVector(), attack_config=config)]
     )
 
     p = data["sentence"].map(lambda x: pr.craft_one_adversarial_sample(x))

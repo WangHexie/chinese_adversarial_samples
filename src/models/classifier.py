@@ -10,11 +10,14 @@ from sklearn.metrics import accuracy_score
 from sklearn.svm import SVC
 
 from src.config.configs import tencent_embedding_path, self_train_test_data_path, single_character_tf_idf_config, \
-    strong_attack_config, self_train_model_path, self_train_train_data_path, DeepModelConfig, deep_model_path
+    strong_attack_config, self_train_model_path, self_train_train_data_path, DeepModelConfig, deep_model_path, \
+    full_word_tf_idf_config
 from src.data.basic_functions import root_dir
 from src.data.dataset import Sentences
+from src.models.deep_model import SimpleCnn, SimpleRNN
 from src.models.textcnn import TextCNN
 from src.predict.word_vector import WordVector
+import lightgbm as lgb
 
 
 class Classifier:
@@ -255,22 +258,35 @@ class EmbeddingSVM(TFIDFEmbeddingClassifier):
         return self
 
 
-class LSTMClassifier(Classifier):
+class EmbeddingLGBM(EmbeddingSVM):
 
     def train(self, x=None, y=None):
-        pass
+        self.vectorizer = self.train_tf_idf_features(self.x, self.tf_idf_config)
+        vectors = self.transform_text_to_vector(self.x)
+        param = {'num_leaves': 64, 'objective': 'binary', 'lambda': 10,
+         'subsample': 0.80, 'colsample_bytree': 0.75, 'min_child_weight': 3, 'eta': 0.02, 'seed': 0, 'silent': 1,
+         "gamma": 1}
 
-    def load_model(self):
-        pass
+        train_data = lgb.Dataset(vectors, label=self.y)
+        num_round = 500
+
+        bst = lgb.train(param, train_data, num_round, verbose_eval=True)
+
+        self.classifier = bst
+        return self
 
     def predict(self, texts):
-        pass
+        return self.classifier.predict(self.transform_text_to_vector(texts))
 
 
 if __name__ == '__main__':
     from src.data.dataset import Tokenizer
     data = Sentences.read_train_data()
-    DeepModel(word_vector=WordVector(), config=DeepModelConfig(), tokenizer=Tokenizer().tokenize).train(x=data["sentence"].values, y=data["label"].values).evaluate()
-    # # print(score)
+    EmbeddingLGBM(word_vector=WordVector(), tf_idf_config=full_word_tf_idf_config, x=data["sentence"].values, y=data["label"].values).train().evaluate()
+    # DeepModel(word_vector=WordVector(),
+    #           config=DeepModelConfig(),
+    #           tokenizer=list,
+    #           model_creator=SimpleRNN).train(x=data["sentence"].values, y=data["label"].values).evaluate()
+    # # # print(score)
     # FastTextClassifier(self_train_model_path).evaluate()
     # print(FastTextClassifier().get_dirty_word_in_the_model(threshold=0.45))
