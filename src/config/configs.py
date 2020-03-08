@@ -52,6 +52,7 @@ strong_attack_config = SOTAAttackConfig(num_of_synonyms=20,
                                         threshold_of_stopping_attack=0.00001, tokenize_method=1)
 
 tencent_embedding_path = os.path.join(root_dir(), "models", "small_Tencent_AILab_ChineseEmbedding.txt")
+weibo_embedding_path = os.path.join(root_dir(), "models", "sgns.weibo.word.bz2")
 self_train_model_path = os.path.join(root_dir(), "models", "self_train.bin")
 self_train_test_data_path = os.path.join(root_dir(), "data", "test.csv")
 self_train_train_data_path = os.path.join(root_dir(), "data", "train.csv")

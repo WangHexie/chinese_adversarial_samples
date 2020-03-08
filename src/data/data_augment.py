@@ -10,7 +10,7 @@ from src.data.dataset import Sentences
 from src.manipulate.importance_based import ImportanceBased
 from src.manipulate.rule_based import SimpleDeleteAndReplacement
 from src.models.classifier import FastTextClassifier, TFIDFClassifier
-from src.predict.word_vector import WordVector
+from src.embedding.word_vector import WordVector
 
 
 class DataAugment:

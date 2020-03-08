@@ -16,7 +16,7 @@ from src.data.basic_functions import root_dir
 from src.data.dataset import Sentences
 from src.models.deep_model import SimpleCnn, SimpleRNN
 from src.models.textcnn import TextCNN
-from src.predict.word_vector import WordVector
+from src.embedding.word_vector import WordVector
 import lightgbm as lgb
 
 
@@ -102,6 +102,22 @@ class FastTextClassifier(Classifier):
         words = words[scores_index]
         is_dirty = np.array(scores > threshold)
         return list(words[is_dirty])
+
+    def _get_word_in_the_model(self, threshold=0.5, dirty=True):
+        words = np.array(self.model.get_words())
+        scores = np.array(self.predict(list(words)))
+
+        if not dirty:
+            scores = 1 - scores
+
+        scores_index = scores.argsort()[::-1]
+        scores = scores[scores_index]
+        words = words[scores_index]
+        is_dirty = np.array(scores > threshold)
+        return list(words[is_dirty])
+
+    def get_good_word_in_the_model(self, threshold=0.5):
+        return self._get_word_in_the_model(threshold, False)
 
     @staticmethod
     def _modify_predict_result(predictions):
@@ -281,12 +297,12 @@ class EmbeddingLGBM(EmbeddingSVM):
 
 if __name__ == '__main__':
     from src.data.dataset import Tokenizer
-    data = Sentences.read_train_data()
-    EmbeddingLGBM(word_vector=WordVector(), tf_idf_config=full_word_tf_idf_config, x=data["sentence"].values, y=data["label"].values).train().evaluate()
+    # data = Sentences.read_train_data()
+    # EmbeddingLGBM(word_vector=WordVector(), tf_idf_config=full_word_tf_idf_config, x=data["sentence"].values, y=data["label"].values).train().evaluate()
     # DeepModel(word_vector=WordVector(),
     #           config=DeepModelConfig(),
     #           tokenizer=list,
     #           model_creator=SimpleRNN).train(x=data["sentence"].values, y=data["label"].values).evaluate()
     # # # print(score)
     # FastTextClassifier(self_train_model_path).evaluate()
-    # print(FastTextClassifier().get_dirty_word_in_the_model(threshold=0.45))
+    print(FastTextClassifier().get_good_word_in_the_model(threshold=0.5))

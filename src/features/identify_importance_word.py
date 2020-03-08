@@ -9,7 +9,7 @@ from src.config.configs import single_character_tf_idf_config, full_word_tf_idf_
     no_chinese_tokenizer_word_tf_idf_config, full_tokenizer_word_tf_idf_config, tencent_embedding_path
 from src.data.dataset import Sentences
 from src.models.classifier import FastTextClassifier, DeepModel, TFIDFEmbeddingClassifier
-from src.predict.word_vector import WordVector
+from src.embedding.word_vector import WordVector
 
 
 class InspectFeatures:
@@ -90,6 +90,16 @@ class FindDirtyWordInEmbedding():
         dirty_word_score = scores[is_dirty_word]
 
         score_index = dirty_word_score.argsort()[::-1]
+        return dirty_word[score_index]
+
+    def get_all_good_word_in_embedding(self, threshold=0.5):
+        classifier = self.classifier.train()
+        scores = np.array(classifier.predict(self.full_word))
+        is_dirty_word = scores < threshold
+        dirty_word = np.array(self.full_word)[is_dirty_word]
+        dirty_word_score = scores[is_dirty_word]
+
+        score_index = dirty_word_score.argsort()
         return dirty_word[score_index]
 
 
@@ -184,6 +194,6 @@ if __name__ == '__main__':
     # print(InspectFeatures(full_word_tf_idf_config, number_of_positive_data=-1).locate_top_dirty_character(800))
     # print(len(PrepareWords.get_dirty_word_in_the_classifier()))
     words = FindDirtyWordInEmbedding(WordVector(),
-                                   config=full_word_tf_idf_config).get_all_dirty_word_in_embedding()
+                                   config=full_word_tf_idf_config).get_all_good_word_in_embedding()
     print(words)
     print(len(words))

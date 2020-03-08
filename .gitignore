@@ -63,4 +63,5 @@ src/server
 *.ckpt.*
 *.bin
 *.json
+*.bz2
 temp.py

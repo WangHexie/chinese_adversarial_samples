@@ -5,7 +5,7 @@ from src.data.dataset import Sentences
 from src.manipulate.importance_based import ImportanceBased, ReplacementEnsemble
 from src.manipulate.rule_based import PhoneticList, ListOfSynonyms, ReplaceWithPhonetic
 from src.models.classifier import TFIDFClassifier, FastTextClassifier
-from src.predict.word_vector import WordVector
+from src.embedding.word_vector import WordVector
 import numpy as np
 
 def input_function():

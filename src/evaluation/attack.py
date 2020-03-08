@@ -10,11 +10,11 @@ from src.data.dataset import Sentences, Tokenizer
 from src.data.measure_distance import DistanceCalculator
 from src.manipulate.importance_based import ReplacementEnsemble
 from src.manipulate.rule_based import DeleteDirtyWordFoundByTokenizer, \
-    ListOfSynonyms, RandomAppendGoodWords, ReplaceWithPhoneticNoSpecialWord
+    ListOfSynonyms, RandomAppendGoodWords, ReplaceWithPhoneticNoSpecialWord, DeleteAFewCharacters
 from src.models.classifier import FastTextClassifier, TFIDFClassifier, EmbeddingSVM, DeepModel, \
     TFIDFEmbeddingClassifier, EmbeddingLGBM
 from src.models.deep_model import SimpleRNN, SimpleCnn
-from src.predict.word_vector import WordVector
+from src.embedding.word_vector import WordVector
 
 
 class EvaluateAttack:
@@ -102,19 +102,22 @@ if __name__ == '__main__':
 
     re_config = SOTAAttackConfig(num_of_synonyms=40,
                                  threshold_of_stopping_attack=0.001, tokenize_method=1, word_use_limit=20,
-                                 text_modify_percentage=0.5)
+                                 text_modify_percentage=0.5, word_to_replace='')
 
     word_vector = WordVector()
-    tencent_embedding = WordVector(tencent_embedding_path)
 
     rep = ReplacementEnsemble([
-        EmbeddingLGBM(word_vector=WordVector(), tf_idf_config=full_word_tf_idf_config, x=data["sentence"].values, y=data["label"].values).train()
+        FastTextClassifier(),
+        TFIDFClassifier(tf_idf_config=asdict(TFIDFConfig(ngram_range=(1, 3), min_df=0.0005)),
+                        x=data["sentence"],
+                        y=data["label"]).train(),
+        EmbeddingLGBM(word_vector=word_vector, tf_idf_config=full_word_tf_idf_config, x=data["sentence"].values, y=data["label"].values).train()
 
     ],
         word_vector=word_vector,
         attack_config=re_config,
-        replacement_classes=[ListOfSynonyms(word_vector=word_vector, attack_config=re_config)],
-        classifier_coefficient=[1]
+        replacement_classes=[DeleteAFewCharacters()],
+        classifier_coefficient=[1, 1, 1]
     )
     #
     # func = DeleteDirtyWordFoundByTokenizer()

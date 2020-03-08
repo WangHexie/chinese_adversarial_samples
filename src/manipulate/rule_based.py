@@ -7,7 +7,7 @@ from pypinyin import lazy_pinyin
 from src.config.configs import tencent_embedding_path, full_word_tf_idf_config
 from src.data.dataset import Sentences
 from src.features.identify_importance_word import PrepareWords, FindDirtyWordInEmbedding
-from src.predict.word_vector import WordVector
+from src.embedding.word_vector import WordVector
 
 
 def insert_sting_middle(string, word, index):
@@ -45,6 +45,13 @@ class ReplaceWithSynonyms(RuleBased):
                 continue
 
         return sentences
+
+
+def shuffle_string(string):
+    l = list(string)
+    random.shuffle(l)
+    result = ''.join(l)
+    return result
 
 
 class DeleteDirtyWordFoundByTokenizer(RuleBased):
@@ -152,6 +159,16 @@ class ReplaceWithPhoneticNoSpecialWord(ReplaceWithPhonetic):
 
             except ValueError:
                 continue
+        return sentences
+
+
+class ShuffleDirtyWord(ReplaceWithPhoneticNoSpecialWord):
+    def replace(self, sentences):
+        dirty_word_list = self.full_word
+
+        for k in dirty_word_list:
+            sentences = sentences.replace(k, shuffle_string(k))
+
         return sentences
 
 

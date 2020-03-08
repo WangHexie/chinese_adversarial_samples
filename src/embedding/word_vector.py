@@ -37,6 +37,9 @@ class WordVector:
         except KeyError:
             return np.zeros(len(self.get_vector("你")))
 
+    def continue_training(self, sentences):
+        pass
+
     def most_similar(self, text, topn=10):
         try:
             syns = self._find_in_cache(text, topn=topn)

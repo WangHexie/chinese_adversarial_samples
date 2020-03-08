@@ -7,14 +7,14 @@ import jieba
 import numpy as np
 
 from src.config.configs import SOTAAttackConfig, full_word_tf_idf_config, tencent_embedding_path, TFIDFConfig, \
-    DeepModelConfig
+    DeepModelConfig, weibo_embedding_path
 from src.data.dataset import Sentences, Tokenizer, Jieba
 from src.features.identify_importance_word import ImportanceJudgement, FGSM
 from src.manipulate.rule_based import ReplaceWithPhonetic, CreateListOfDeformation, InsertPunctuation, PhoneticList, \
-    ListOfSynonyms
-from src.models.classifier import TFIDFClassifier, FastTextClassifier, DeepModel
+    ListOfSynonyms, ShuffleDirtyWord, DeleteAFewCharacters
+from src.models.classifier import TFIDFClassifier, FastTextClassifier, DeepModel, EmbeddingLGBM
 from src.models.deep_model import SimpleCnn, SimpleRNN
-from src.predict.word_vector import WordVector
+from src.embedding.word_vector import WordVector
 
 
 def tokenizer_selector(method) -> callable:
@@ -305,20 +305,30 @@ if __name__ == '__main__':
     # )
     data = Sentences.read_train_data()
 
-    config = SOTAAttackConfig(num_of_synonyms=40,
-                              threshold_of_stopping_attack=0.001, tokenize_method=1, word_use_limit=20,
-                              text_modify_percentage=0.50)
+    re_config = SOTAAttackConfig(num_of_synonyms=40,
+                                 threshold_of_stopping_attack=0.001, tokenize_method=1, word_use_limit=20,
+                                 text_modify_percentage=0.5, word_to_replace='')
 
-    pr = ReplacementEnsemble([
-        DeepModel(word_vector=WordVector(), config=DeepModelConfig(), tokenizer=list, model_creator=SimpleRNN).train(
-            x=data["sentence"].values, y=data["label"].values)
+    word_vector = WordVector(weibo_embedding_path, number_of_word_to_load=30000)
+
+    rep = ReplacementEnsemble([
+        FastTextClassifier(),
+        TFIDFClassifier(tf_idf_config=asdict(TFIDFConfig(ngram_range=(1, 3), min_df=0.0005)),
+                        x=data["sentence"],
+                        y=data["label"]).train(),
+        EmbeddingLGBM(word_vector=word_vector, tf_idf_config=full_word_tf_idf_config, x=data["sentence"].values,
+                      y=data["label"].values).train()
+
     ],
-        word_vector=WordVector(),
-        attack_config=config,
-        replacement_classes=[ListOfSynonyms(word_vector=WordVector(), attack_config=config)]
+        word_vector=word_vector,
+        attack_config=re_config,
+        replacement_classes=[DeleteAFewCharacters()],
+        classifier_coefficient=[1, 1, 1]
     )
+    data = Sentences.read_insult_data().iloc[:100, :]
 
-    p = data["sentence"].map(lambda x: pr.craft_one_adversarial_sample(x))
+
+    p = data["sentence"].map(lambda x: rep.craft_one_adversarial_sample(x))
 
     print(p.values.tolist()[:30])
     print(data["sentence"].values.tolist()[:30])
