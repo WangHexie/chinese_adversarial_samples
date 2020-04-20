@@ -136,11 +136,12 @@ class Sentences:
             negative_data = negative_data[negative_data["indirect_label"] != 1]
             negative_data.reset_index(inplace=True)
         negative_data["label"] = np.ones(len(negative_data))
+        negative_data = negative_data.drop_duplicates(subset="sentence").reset_index()
 
         if num_of_positive == "auto":
             num_of_positive = len(negative_data)
 
-        positive_data = Sentences.read_positive_data()
+        positive_data = Sentences.read_positive_data().iloc[:num_of_positive]
         positive_data["label"] = np.zeros(len(positive_data))
         positive_data = positive_data.iloc[:num_of_positive]
         try:
@@ -148,6 +149,7 @@ class Sentences:
             full_data = pd.concat([negative_data, positive_data, augment_data], ignore_index=True, sort=False)[
                 ["sentence", "label"]]
         except FileNotFoundError:
+            print("not reading augment data")
             full_data = pd.concat([negative_data, positive_data], ignore_index=True, sort=False)[["sentence", "label"]]
 
         full_data = full_data.dropna()
@@ -158,16 +160,33 @@ class Sentences:
 
         return full_data.drop_duplicates(subset="sentence").reset_index()
 
+    @staticmethod
+    def save_fasttext_train_data(x, y, path: tuple, test_data_size=0.4):
+        data = pd.DataFrame([x, y], columns=['sentence', 'label'])
+        data['label'] = data['label'].map(lambda i: "__label__" + str(i))
+        data['sentence'] = data['sentence'].astype('str')
+
+        train_data, test_data = train_test_split(data, test_size=test_data_size)
+        train_data.to_csv(path[0], header=False, index=False, sep=' ', quoting=csv.QUOTE_NONE)
+        test_data.to_csv(path[1], header=False, index=False, sep=' ', quoting=csv.QUOTE_NONE)
+
+
     def save_train_data(self, num_of_positive="auto", test_data_size=0.4):
+        """
+        save train and test data for fasttext classifier
+        :param num_of_positive:
+        :param test_data_size:
+        :return:
+        """
         data = self.read_full_data(num_of_positive=num_of_positive, ignore_indirect_data=True)[["label", "sentence"]]
         data['label'] = data['label'].map(lambda x: "__label__" + str(x))
         data['sentence'] = data['sentence'].astype('str')
 
         train_data, test_data = train_test_split(data, test_size=test_data_size)
-        train_data.to_csv(self_train_train_data_path, header=False, index=False, sep=' ',
-                          quoting=csv.QUOTE_NONE)
+        train_data.to_csv(self_train_train_data_path, header=False, index=False, sep=' ', quoting=csv.QUOTE_NONE)
         test_data.to_csv(self_train_test_data_path, header=False, index=False, sep=' ', quoting=csv.QUOTE_NONE)
         print(test_data)
+
 
     @staticmethod
     def read_df_data(path):
@@ -244,7 +263,8 @@ class Jieba(Tokenizer):
 
 if __name__ == '__main__':
     # data = Sentences.read_full_data(ignore_indirect_data=False)
-    print(Sentences.get_word_pos_neg_data())
+    data = Sentences.read_full_data()
+    print(data)
     # print(Sentences().read_stop_words())
     # print(Sentences().save_train_data(-1))
     # print(Sentences.read_common_words())

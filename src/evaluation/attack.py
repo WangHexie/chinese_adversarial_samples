@@ -1,25 +1,28 @@
-import os
-import random
 from dataclasses import asdict
 
 import numpy as np
 
 from src.config.configs import SOTAAttackConfig, TFIDFConfig, full_word_tf_idf_config, self_train_model_path, \
-    DeepModelConfig, tencent_embedding_path
-from src.data.dataset import Sentences, Tokenizer
+    DeepModelConfig
+from src.data.dataset import Sentences
 from src.data.measure_distance import DistanceCalculator
-from src.manipulate.importance_based import ReplacementEnsemble
-from src.manipulate.rule_based import DeleteDirtyWordFoundByTokenizer, \
-    ListOfSynonyms, RandomAppendGoodWords, ReplaceWithPhoneticNoSpecialWord, DeleteAFewCharacters
-from src.models.classifier import FastTextClassifier, TFIDFClassifier, EmbeddingSVM, DeepModel, \
-    TFIDFEmbeddingClassifier, EmbeddingLGBM
-from src.models.deep_model import SimpleRNN, SimpleCnn
 from src.embedding.word_vector import WordVector
+from src.manipulate.rule_based import DeleteDirtyWordFoundByTokenizer, \
+    InsertSpace, \
+    ReplaceWithPhonetic, \
+    InsertPunctuationInDirtyWordFoundByTokenizer, append_word
+from src.models.classifier import FastTextClassifier, TFIDFClassifier, EmbeddingSVM, EmbeddingLGBM, DeepModel
+from src.models.deep_model import SimpleCnn, SimpleRNN
 
 
 class EvaluateAttack:
     @staticmethod
     def choose_dataset(data_type=0):
+        """
+
+        :param data_type: 0: all insult data. 1:test data
+        :return:
+        """
         if data_type == 0:
             return Sentences.read_insult_data()
 
@@ -44,6 +47,13 @@ class EvaluateAttack:
 
     @staticmethod
     def evaluate(attack_method: callable, classifier, dataset_type=0):
+        """
+
+        :param attack_method:
+        :param classifier:
+        :param dataset_type: 0: all insult data. 1:test data
+        :return:
+        """
         data = EvaluateAttack.choose_dataset(dataset_type)
 
         original_sentences = data["sentence"].values.tolist()
@@ -65,37 +75,39 @@ class EvaluateAttack:
                                                     np.array(adversarial_sentences)[success_status])
 
 
-def self_defined_function(manipulate_func: callable):
-    data = Sentences.read_train_data()
-    classifiers = {"fasttext provided": FastTextClassifier(),
-                   "fasttext self-trained": FastTextClassifier(self_train_model_path),
-                   "embedding svn": EmbeddingSVM(x=data["sentence"],
-                                                  y=data["label"], word_vector=WordVector()).train(),
-                   "tfidf ngram": TFIDFClassifier(tf_idf_config=asdict(TFIDFConfig(ngram_range=(1, 3), min_df=0.0005)),
-                                                  x=data["sentence"],
-                                                  y=data["label"]).train(),
-                   "tfidf tokenizer": TFIDFClassifier(tf_idf_config=full_word_tf_idf_config,
-                                                      x=data["sentence"],
-                                                      y=data["label"]).train(),
-
-                   }
-
+def self_defined_function(manipulate_func: callable, classifiers):
     control_group = {"delete all dirty word": DeleteDirtyWordFoundByTokenizer().replace}
 
     for key, item in classifiers.items():
         print("-----------start {} evaluate---------------".format(key))
         EvaluateAttack.evaluate(manipulate_func, item, dataset_type=1)
 
-    for name, func in control_group.items():
-        for cls_name, cls in classifiers.items():
-            print("-----------control group {}, {} evaluate---------------".format(name, cls_name))
-            EvaluateAttack.evaluate(func, cls, dataset_type=1)
+    # for name, func in control_group.items():
+    #     for cls_name, cls in classifiers.items():
+    #         print("-----------control group {}, {} evaluate---------------".format(name, cls_name))
+    #         EvaluateAttack.evaluate(func, cls, dataset_type=1)
 
-    # print("-----------append fastext evaluate---------------")
-    # EvaluateAttack.evaluate(SimpleDeleteAndReplacement.random_append_good_word, FastTextClassifier(), dataset_type=1)
-    # print("-----------append tfidf evaluate---------------")
-    # EvaluateAttack.evaluate(SimpleDeleteAndReplacement.random_append_good_word, cls, dataset_type=1)
 
+data = Sentences.read_train_data()
+word_vector = WordVector()
+classifiers = {
+    "tfidf ngram": TFIDFClassifier(tf_idf_config=asdict(TFIDFConfig(ngram_range=(1, 3), min_df=0.0005)),
+                                   x=data["sentence"],
+                                   y=data["label"]).train(),
+    "tfidf tokenizer": TFIDFClassifier(tf_idf_config=full_word_tf_idf_config,
+                                       x=data["sentence"],
+                                       y=data["label"]).train(),
+    "embedding svn": EmbeddingSVM(word_vector=word_vector).train(x=data["sentence"], y=data["label"]),
+
+    "embedding lgbm": EmbeddingLGBM(x=data["sentence"], y=data["label"], word_vector=word_vector).train(),
+    "fasttext provided": FastTextClassifier(),
+    "fasttext self-trained": FastTextClassifier(self_train_model_path),
+    "cnn": DeepModel(word_vector=word_vector, config=DeepModelConfig(), tokenizer=list, model_creator=SimpleCnn).train(
+        x=data["sentence"].values, y=data["label"].values),
+    "rnn": DeepModel(word_vector=word_vector, config=DeepModelConfig(), tokenizer=list,
+                     model_creator=SimpleRNN).train(x=data["sentence"].values, y=data["label"].values),
+
+}
 
 if __name__ == '__main__':
     data = Sentences.read_train_data()
@@ -104,31 +116,45 @@ if __name__ == '__main__':
                                  threshold_of_stopping_attack=0.001, tokenize_method=1, word_use_limit=20,
                                  text_modify_percentage=0.5, word_to_replace='')
 
-    word_vector = WordVector()
-
-    rep = ReplacementEnsemble([
-        FastTextClassifier(),
-        TFIDFClassifier(tf_idf_config=asdict(TFIDFConfig(ngram_range=(1, 3), min_df=0.0005)),
-                        x=data["sentence"],
-                        y=data["label"]).train(),
-        EmbeddingLGBM(word_vector=word_vector, tf_idf_config=full_word_tf_idf_config, x=data["sentence"].values, y=data["label"].values).train()
-
-    ],
-        word_vector=word_vector,
-        attack_config=re_config,
-        replacement_classes=[DeleteAFewCharacters()],
-        classifier_coefficient=[1, 1, 1]
-    )
+    # word_vector = WordVector()
     #
+    # rep = ReplacementEnsemble([
+    #     FastTextClassifier(),
+    #     TFIDFClassifier(tf_idf_config=asdict(TFIDFConfig(ngram_range=(1, 3), min_df=3)),
+    #                     x=data["sentence"],
+    #                     y=data["label"]).train(),
+    #     # EmbeddingLGBM(word_vector=word_vector, tf_idf_config=full_word_tf_idf_config, x=data["sentence"].values, y=data["label"].values).train()
+    #
+    # ],
+    #     word_vector=word_vector,
+    #     attack_config=re_config,
+    #     replacement_classes=[PhoneticList(), InsertPunctuation()],
+    #     classifier_coefficient=[1, 1]
+    # )
+    # #
     # func = DeleteDirtyWordFoundByTokenizer()
     # p = ReplaceWithPhoneticNoSpecialWord()
 
-
     # def repp(string):
     #     return p.replace(func.replace(string))
-    self_defined_function(rep.craft_one_adversarial_sample)
+    # print(rep.craft_one_adversarial_sample("傻逼呆湾"))
+
+    # self_defined_function(InsertSpace().replace)
     # ListOfSynonyms(word_vector=WordVector(), attack_config=SOTAAttackConfig(num_of_synonyms=40,
     #                                                                         threshold_of_stopping_attack=0.001,
     #                                                                         tokenize_method=1,
     #                                                                         word_use_limit=20,
     #                                                                         text_modify_percentage=0.5))
+    import warnings
+
+    warnings.simplefilter("ignore")
+    modi = {
+        "insert space": InsertSpace().replace,
+        "insert space in dirty word": InsertPunctuationInDirtyWordFoundByTokenizer().replace,
+        "replace with syn": ReplaceWithPhonetic().replace,
+        "append good word": append_word,
+        "delete all": DeleteDirtyWordFoundByTokenizer().replace
+    }
+    for k, i in modi.items():
+        print(k)
+        self_defined_function(i, classifiers)

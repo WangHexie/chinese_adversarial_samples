@@ -20,6 +20,11 @@ class RuleBased:
         pass
 
 
+class InsertSpace(RuleBased):
+    def replace(self, sentences):
+        return " ".join(list(sentences))
+
+
 class ReplaceWithSynonyms(RuleBased):
     def __init__(self, word_vector: WordVector):
         self.word_vector = word_vector
@@ -63,6 +68,21 @@ class DeleteDirtyWordFoundByTokenizer(RuleBased):
 
         for k in dirty_word_list:
             sentences = sentences.replace(k, '')
+
+        return sentences
+
+
+class InsertPunctuationInDirtyWordFoundByTokenizer(RuleBased):
+    def __init__(self):
+        self.full_words = PrepareWords.get_dirty_word_in_the_classifier() + PrepareWords.get_full_bad_words_and_character()
+
+    def replace(self, sentences):
+        dirty_word_list = self.full_words
+
+        for k in dirty_word_list:
+            if len(k) < 2:
+                continue
+            sentences = sentences.replace(k, " ".join(list(k)))
 
         return sentences
 
@@ -281,7 +301,7 @@ class InsertPunctuation(CreateListOfDeformation):
         pass
 
     def __init__(self):
-        self.punctuation = ",.|)("
+        self.punctuation = ",.|)(~@#￥%…&—+~!@#$%^&*()_+-=,./;'[]\{}|:\"<>?"
 
     def create(self, sentence):
         if len(sentence) < 2:
@@ -341,7 +361,25 @@ class SimpleDeleteAndReplacement:
     def add_good_word(string):
         return "你这个人真好啊。" + string + "好棒，加油哦"
 
+def append_word(sentence):
+    return sentence + str(random.choice(list(range(10)))) * len(sentence)
 
 if __name__ == '__main__':
     # print(DeleteAFewCharacters().create("你说什么？？？"))
-    print(ReplaceWithPhoneticNoSpecialWord().full_word)
+    # print(InsertSpace().replace("你说什么"))
+    print("start")
+    print( InsertPunctuationInDirtyWordFoundByTokenizer().replace("你说什么呢傻逼贱人你妈"))
+
+    data = Sentences.read_train_data()
+
+    modi = {
+        "insert space": InsertSpace().replace,
+        "insert space in dirty word": InsertPunctuationInDirtyWordFoundByTokenizer().replace,
+        "replace with syn": ReplaceWithPhonetic().replace,
+        "append good word": append_word,
+        "delete all": DeleteDirtyWordFoundByTokenizer().replace
+    }
+    print(data["sentence"].values[0])
+    for k, i in modi.items():
+        print(k)
+        print(i(data["sentence"].values[0]))

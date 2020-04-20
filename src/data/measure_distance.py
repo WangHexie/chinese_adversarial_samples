@@ -86,10 +86,13 @@ class DistanceCalculator:
         distances['jaccard_word'] = np.array([jaccard_word(docs_a_cut[i], docs_b_cut[i]) for i in range(num_elements)])
         distances['jaccard_char'] = np.array([jaccard_char(docs_a[i], docs_b[i]) for i in range(num_elements)])
         distances['embedding_cosine'] = np.array(self.batch_embedding_cosine_distance(docs_a_cut, docs_b_cut))
-        distances['final_similarity_score'] = 1 - (distances['normalized_levenshtein'] * 3 / 14 + \
-                                                   distances['jaccard_word'] * 1 / 7 + \
-                                                   distances['jaccard_char'] * 3 / 14 + \
-                                                   distances['embedding_cosine'] * 3 / 7)
+        # distances['final_similarity_score'] = 1 - (distances['normalized_levenshtein'] * 3 / 14 + \
+        #                                            distances['jaccard_word'] * 1 / 7 + \
+        #                                            distances['jaccard_char'] * 3 / 14 + \
+        #                                            distances['embedding_cosine'] * 3 / 7)
+        distances['final_similarity_score'] = 1 - (distances['normalized_levenshtein'] + \
+                                                   distances['jaccard_word']  + \
+                                                   distances['jaccard_char'] ) /3
         return distances
 
     def validate_input(self, text_list_a, text_list_b):

@@ -27,8 +27,7 @@ class TFIDFConfig:
 
 single_character_tf_idf_config = asdict(TFIDFConfig(min_df=0.0005))
 no_chinese_tokenizer_word_tf_idf_config = asdict(TFIDFConfig(ngram_range=(2, 3), min_df=0.0005))
-full_tokenizer_word_tf_idf_config = asdict(TFIDFConfig(ngram_range=(1, 3),
-                                                       min_df=0.0005))
+full_tokenizer_word_tf_idf_config = asdict(TFIDFConfig(ngram_range=(1, 3), min_df=0.0005))  # not using tokenizer only ngram
 full_word_tf_idf_config = asdict(TFIDFConfig(analyzer="word", tokenizer=pkuseg.pkuseg().cut, min_df=0.0))
 
 
@@ -46,6 +45,7 @@ class SOTAAttackConfig:
 @dataclass
 class DeepModelConfig:
     input_length:int = 80
+    verbose:int = 0
 
 
 strong_attack_config = SOTAAttackConfig(num_of_synonyms=20,

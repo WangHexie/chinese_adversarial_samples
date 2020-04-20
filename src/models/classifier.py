@@ -18,7 +18,8 @@ from src.models.deep_model import SimpleCnn, SimpleRNN
 from src.models.textcnn import TextCNN
 from src.embedding.word_vector import WordVector
 import lightgbm as lgb
-
+from sklearn.model_selection import train_test_split
+import pandas as pd
 
 class Classifier:
     @abc.abstractmethod
@@ -61,6 +62,72 @@ class Classifier:
         print("remove dirty word:", score)
 
 
+class TransformerClassifier(Classifier):
+    def load_model(self):
+        pass
+
+    def __init__(self, model_name='clue/albert_chinese_small', max_len=50, batch_size=64, learning_rate=3e-5,
+                 epochs=3):
+        self.threshold = None
+        self.model = None
+        self.learner = None
+        self.predictor = None
+        self.threshold = None
+
+        self.model_name = model_name
+        self.max_len = max_len
+        self.batch_size = batch_size
+        self.learning_rate = learning_rate
+        self.epochs = epochs
+
+    def predict_label(self, data: list):
+        prob = np.array(self.predict(list(data)))
+        return self.prob_convert_to_label(prob)
+
+    def prob_convert_to_label(self, prob):
+        prob = np.array(prob)
+        labels = (prob > self.threshold).astype(int)
+        return labels
+
+    def predict(self, data: list):
+        return self.predictor.predict_proba(data)[:, 1]
+
+    def set_threshold(self, x, y):
+        pov_num = (np.array(y) == 1).sum()
+        pov_prediction = np.array(self.predict(list(x)))
+        self.threshold = np.sort(pov_prediction)[::-1][pov_num:pov_num + 2].mean()
+        return self
+
+    def save_prob_prediction_result(self, prob, label_name, save_path):
+        pd.DataFrame(prob).to_csv(os.path.join(save_path, label_name+"prob"+str(self.threshold)), encoding="utf-8")
+
+    def train(self, x=None, y=None):
+        from ktrain import text
+        import ktrain
+        # only support binary classification
+        full_length = len(y)
+        pov_num = (np.array(y) == 1).sum()
+        neg_num = full_length - pov_num
+
+        t = text.Transformer(self.model_name, maxlen=self.max_len, class_names=["0", "1"])
+        train_x, test_x, train_y, test_y = train_test_split(x, y, test_size=0.2)
+        trn = t.preprocess_train(train_x, train_y.to_list())
+        val = t.preprocess_test(test_x, test_y.to_list())
+
+        model = t.get_classifier()
+        learner = ktrain.get_learner(model, train_data=trn, val_data=val, batch_size=self.batch_size)
+        # TODO: disable class_weight
+        # TODO: add early top parameter into config
+        learner.autofit(self.learning_rate, self.epochs, class_weight={0: pov_num, 1: neg_num}, early_stopping=4, reduce_on_plateau=2)
+
+        self.learner = learner
+        self.predictor = ktrain.get_predictor(learner.model, t)
+        # TODO: lower number of x
+        self.set_threshold(x, y)
+
+        return self
+
+
 class FastTextClassifier(Classifier):
 
     def __init__(self, model_path=os.path.join(root_dir(), "models", "mini.ftz")):
@@ -74,18 +141,25 @@ class FastTextClassifier(Classifier):
         return self
 
     def train(self, x=None, y=None):
+        if x is not None:
+            temp_path = (os.path.join(root_dir(), "data", "t_train.csv"), os.path.join(root_dir(), "data", "t_test.csv"))
+            Sentences.save_fasttext_train_data(x, y, path=temp_path)
+            train_path, test_path = temp_path
+        else:
+            train_path, test_path = self_train_train_data_path, self_train_test_data_path
+
         try:
-            self.model = fasttext.train_supervised(self_train_train_data_path,
+            self.model = fasttext.train_supervised(train_path,
                                                    dim=200,
                                                    pretrainedVectors=tencent_embedding_path,
-                                                   autotuneValidationFile=self_train_test_data_path,
+                                                   autotuneValidationFile=test_path,
                                                    autotuneDuration=1200)
         except Exception:
             Sentences().save_train_data()
-            self.model = fasttext.train_supervised(self_train_train_data_path,
+            self.model = fasttext.train_supervised(train_path,
                                                    dim=200,
                                                    pretrainedVectors=tencent_embedding_path,
-                                                   autotuneValidationFile=self_train_test_data_path,
+                                                   autotuneValidationFile=test_path,
                                                    autotuneDuration=3000)
 
         print(self.model.test(self_train_test_data_path))
@@ -164,9 +238,11 @@ class TFIDFClassifier(Classifier):
         return self.classifier.predict_proba(self.transform_text_to_vector(texts))[:, 1]
 
     def train(self, x=None, y=None):
-        self.vectorizer = self.train_tf_idf_features(self.x, self.tf_idf_config)
-        vectors = self.transform_text_to_vector(self.x)
-        clf = LogisticRegression(random_state=0).fit(vectors, self.y)
+        if x is None:
+            x, y = self.x, self.y
+        self.vectorizer = self.train_tf_idf_features(x, self.tf_idf_config)
+        vectors = self.transform_text_to_vector(x)
+        clf = LogisticRegression(random_state=0).fit(vectors, y)
         self.classifier = clf
         return self
 
@@ -198,12 +274,14 @@ class DeepModel(Classifier):
         self.model = tf.keras.models.load_model(deep_model_path)
 
     def train(self, x=None, y=None):
+
         self.create_model()
 
         index_data = self.text_to_id(x)
         train_data_i = tf.keras.preprocessing.sequence.pad_sequences(index_data, maxlen=self.config.input_length, dtype='int32',
                                                                      padding='post', truncating='pre', value=0)
-        self.model.fit(x=train_data_i, y=y, batch_size=16, epochs=5, verbose=1, callbacks=None,
+
+        self.model.fit(x=train_data_i, y=y, batch_size=16, epochs=5, verbose=self.config.verbose, callbacks=None,
                        validation_split=0.1, validation_data=None, shuffle=True, class_weight=None,
                        sample_weight=None, initial_epoch=0, steps_per_epoch=None, validation_steps=None,
                        validation_freq=1, max_queue_size=10, workers=1, use_multiprocessing=False)
@@ -257,7 +335,7 @@ class TFIDFEmbeddingClassifier(TFIDFClassifier):
         for word_feature in features:
             vectors = np.array([self.word_vector.get_vector(word) * values.pop(0) for word in word_feature])
             if len(word_feature) == 0:
-                print("word feature error, but fixed")
+                # print("word feature error, but fixed")
                 final_vectors.append(np.zeros(len(self.word_vector.get_vector("你"))))
             else:
                 final_vectors.append(np.mean(vectors, axis=0))
@@ -267,9 +345,12 @@ class TFIDFEmbeddingClassifier(TFIDFClassifier):
 
 class EmbeddingSVM(TFIDFEmbeddingClassifier):
     def train(self, x=None, y=None):
-        self.vectorizer = self.train_tf_idf_features(self.x, self.tf_idf_config)
-        vectors = self.transform_text_to_vector(self.x)
-        clf = SVC(random_state=0, probability=True).fit(vectors, self.y)
+        if x is None:
+            x, y = self.x, self.y
+
+        self.vectorizer = self.train_tf_idf_features(x, self.tf_idf_config)
+        vectors = self.transform_text_to_vector(x)
+        clf = SVC(random_state=0, probability=True).fit(vectors, y)
         self.classifier = clf
         return self
 
@@ -277,16 +358,19 @@ class EmbeddingSVM(TFIDFEmbeddingClassifier):
 class EmbeddingLGBM(EmbeddingSVM):
 
     def train(self, x=None, y=None):
-        self.vectorizer = self.train_tf_idf_features(self.x, self.tf_idf_config)
-        vectors = self.transform_text_to_vector(self.x)
+        if x is None:
+            x, y = self.x, self.y
+
+        self.vectorizer = self.train_tf_idf_features(x, self.tf_idf_config)
+        vectors = self.transform_text_to_vector(x)
         param = {'num_leaves': 64, 'objective': 'binary', 'lambda': 10,
-         'subsample': 0.80, 'colsample_bytree': 0.75, 'min_child_weight': 3, 'eta': 0.02, 'seed': 0, 'silent': 1,
+         'subsample': 0.80, 'colsample_bytree': 0.75, 'min_child_weight': 3, 'eta': 0.02, 'seed': 0, 'verbose': -1,
          "gamma": 1}
 
-        train_data = lgb.Dataset(vectors, label=self.y)
+        train_data = lgb.Dataset(vectors, label=y, params={'verbose': -1})
         num_round = 500
 
-        bst = lgb.train(param, train_data, num_round, verbose_eval=True)
+        bst = lgb.train(param, train_data, num_round, verbose_eval=False)
 
         self.classifier = bst
         return self

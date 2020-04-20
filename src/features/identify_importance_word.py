@@ -110,10 +110,30 @@ class PrepareWords:
 
     @staticmethod
     def get_full_dirty_word_list_by_ngram(number_of_characters=1000):
+        """
+        dirty word find by tfidf lr classifier. NGRAM
+        :param number_of_characters:
+        :return:
+        """
         return InspectFeatures(full_tokenizer_word_tf_idf_config).locate_top_dirty_character(number_of_characters)
 
     @staticmethod
+    def get_full_dirty_word_list_by_tokenizer(number_of_characters=1000):
+        """
+        dirty word find by tfidf lr classifier. NGRAM
+        :param number_of_characters:
+        :return:
+        """
+        return InspectFeatures(full_word_tf_idf_config).locate_top_dirty_character(number_of_characters)
+
+    @staticmethod
     def get_dirty_word_list(number_of_characters=1000, classifier_threshold=0.1):
+        """
+        use fasttext classifier(provided by ali) to get dirty word ToDO: use self-trained classifier
+        :param number_of_characters:
+        :param classifier_threshold:
+        :return:
+        """
         return InspectFeatures.is_dirty_by_classifier(FastTextClassifier(),
                                                       InspectFeatures(
                                                           no_chinese_tokenizer_word_tf_idf_config).locate_top_dirty_character(
@@ -193,7 +213,8 @@ class FGSM(ImportanceJudgement):
 if __name__ == '__main__':
     # print(InspectFeatures(full_word_tf_idf_config, number_of_positive_data=-1).locate_top_dirty_character(800))
     # print(len(PrepareWords.get_dirty_word_in_the_classifier()))
-    words = FindDirtyWordInEmbedding(WordVector(),
-                                   config=full_word_tf_idf_config).get_all_good_word_in_embedding()
-    print(words)
-    print(len(words))
+    # words = FindDirtyWordInEmbedding(WordVector(),
+    #                                config=full_word_tf_idf_config).get_all_good_word_in_embedding()
+    # print(words)
+    # print(len(words))
+    print(PrepareWords.get_full_dirty_word_list_by_tokenizer())

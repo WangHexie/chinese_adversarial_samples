@@ -27,7 +27,7 @@ class SimpleCnn(Model):
         model.add(tf.keras.layers.MaxPooling1D(pool_size=4, strides=None, padding='valid', data_format='channels_last'))
         model.add(tf.keras.layers.Flatten())
         model.add(tf.keras.layers.Dense(1))
-        model.summary()
+        # model.summary()
         model.compile(optimizer='adam',
                       loss="mean_absolute_error",
                       metrics=['accuracy'])
@@ -68,7 +68,7 @@ class SimpleRNN(SimpleCnn):
         model.add(tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(96, activation='relu')))
         model.add(tf.keras.layers.Flatten())
         model.add(tf.keras.layers.Dense(1))
-        model.summary()
+        # model.summary()
         model.compile(optimizer='adam',
                       loss="mean_absolute_error",
                       metrics=['accuracy'])
