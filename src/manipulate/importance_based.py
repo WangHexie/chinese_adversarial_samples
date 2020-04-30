@@ -41,9 +41,14 @@ class ImportanceBased:
         return self.tokenizer(text)
 
     def _identify_important_word(self, text_list, word_to_replace='叇'):
-        importance_score = np.mean([self._delete_or_replace_score(text_list, word_to_replace='叇'),
-                                    self._temporal_head_score(text_list),
-                                    self._temporal_tail_score(text_list)],  axis=0)
+        if self.attack_config.importance_function == 1:
+            importance_score = np.mean([self._delete_or_replace_score(text_list, word_to_replace=word_to_replace),
+                                        self._temporal_head_score(text_list),
+                                        self._temporal_tail_score(text_list)],  axis=0)
+        elif self.attack_config.importance_function == 0:
+            importance_score = np.mean([self._delete_or_replace_score(text_list, word_to_replace=word_to_replace)], axis=0)
+        else:
+            raise Exception
 
         for i in range(len(importance_score)):
             for word in self.stop_word_and_structure_word_list:
@@ -92,7 +97,6 @@ class ImportanceBased:
         rear_n.insert(-1, 0)
 
         return list(np.array(probs) - np.array(rear_n))
-
 
     def _replace_text_and_predict(self, text_tokens, synonyms, index):
         sentences = []

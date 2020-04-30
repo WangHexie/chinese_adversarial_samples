@@ -40,6 +40,7 @@ class SOTAAttackConfig:
     text_modify_percentage: float = 0.5
     word_use_limit: int = 20
     word_to_replace: str = '叇'
+    importance_function: int = 1
 
 
 @dataclass
