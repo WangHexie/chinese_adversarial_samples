@@ -185,6 +185,8 @@ def sota_evaluation2():
     classifiers.pop("fasttext self-trained")
 
     for k, i in classifiers.items():
+        # if k != "rnn":
+        #     continue
         print("***************************************************")
         print(k)
 
@@ -207,10 +209,42 @@ def sota_evaluation2():
         classifiers[k] = temp
 
 
+def create_result():
+    org = "以前你没染上梅毒性病的时候，老子天天日妳日的不要不要的。"
+    import warnings
+
+    warnings.simplefilter("ignore")
+
+    classifiers.pop("tfidf tokenizer")
+    classifiers.pop("embedding svn")
+    classifiers.pop("fasttext provided")
+    classifiers.pop("fasttext self-trained")
+
+    for k, i in classifiers.items():
+
+        print("***************************************************")
+        print(k)
+
+        re_config = SOTAAttackConfig(num_of_synonyms=40,
+                                     threshold_of_stopping_attack=0.1, tokenize_method=1, word_use_limit=10000,
+                                     text_modify_percentage=0.5, word_to_replace='', importance_function=0)
+
+        modi_f = ReplacementEnsemble([
+            i,
+        ],
+            word_vector=word_vector,
+            attack_config=re_config,
+            replacement_classes=[ListOfSynonyms(word_vector=word_vector, attack_config=re_config)],
+            classifier_coefficient=[1]
+        ).craft_one_adversarial_sample
+
+        print(modi_f(org))
+
+
 if __name__ == '__main__':
     data = Sentences.read_train_data()
 
-    sota_evaluation2()
+    create_result()
 
     # word_vector = WordVector()
     #
