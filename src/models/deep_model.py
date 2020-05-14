@@ -73,3 +73,7 @@ class SimpleRNN(SimpleCnn):
                       loss="mean_absolute_error",
                       metrics=['accuracy'])
         self.model = model
+
+
+if __name__ == '__main__':
+    pass

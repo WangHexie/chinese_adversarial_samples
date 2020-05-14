@@ -59,12 +59,6 @@ class Sentences:
     def __remove_emoji(string):
         REGEX_TO_REMOVE = re.compile(
             r"[^\u4E00-\u9FA5a-zA-Z0-9\!\@\#\$\%\^\&\*\(\)\-\_\+\=\`\~\\\|\[\]\{\}\:\;\"\'\,\<\.\>\/\?\ \t，。！？]")
-        # emoji_pattern = re.compile("["
-        #                            u"\U0001F600-\U0001F64F"  # emoticons
-        #                            u"\U0001F300-\U0001F5FF"  # symbols & pictographs
-        #                            u"\U0001F680-\U0001F6FF"  # transport & map symbols
-        #                            u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
-        #                            "]+", flags=re.UNICODE)
         return REGEX_TO_REMOVE.sub(r'', string)
 
     @staticmethod
@@ -159,6 +153,14 @@ class Sentences:
         full_data["label"] = full_data["label"].astype('int')
 
         return full_data.drop_duplicates(subset="sentence").reset_index()
+
+    @staticmethod
+    def read_clean_pov_data():
+        full_data = Sentences.read_positive_data()
+        full_data["sentence"] = full_data["sentence"].map(
+            lambda x: Sentences._remove_weibo_style(
+                Sentences._remove_white_space(Sentences._remove_new_line_symbol(Sentences.__remove_emoji(x)))))
+        return full_data
 
     @staticmethod
     def save_fasttext_train_data(x, y, path: tuple, test_data_size=0.4):
@@ -263,7 +265,8 @@ class Jieba(Tokenizer):
 
 if __name__ == '__main__':
     # data = Sentences.read_full_data(ignore_indirect_data=False)
-    data = Sentences.read_full_data()
+    data = Sentences.read_clean_pov_data()
+    data.to_csv("pov.csv")
     print(data)
     # print(Sentences().read_stop_words())
     # print(Sentences().save_train_data(-1))

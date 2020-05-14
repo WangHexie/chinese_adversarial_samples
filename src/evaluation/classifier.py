@@ -8,7 +8,7 @@ from src.config.configs import TFIDFConfig, full_word_tf_idf_config, DeepModelCo
 from src.data.dataset import Sentences, Tokenizer
 from src.embedding.word_vector import WordVector
 from src.models.classifier import TFIDFClassifier, FastTextClassifier, EmbeddingSVM, EmbeddingLGBM, DeepModel
-from src.models.deep_model import SimpleCnn
+from src.models.deep_model import SimpleCnn, SimpleRNN
 
 
 class ClassifierWrapper(BaseEstimator):
@@ -38,9 +38,13 @@ def evaluate_classifier(classifier):
 def evaluate_all():
     word_vector = WordVector()
     classifiers = {
-        "tfidf ngram": TFIDFClassifier(tf_idf_config=asdict(TFIDFConfig(ngram_range=(1, 3), min_df=5))),
-        "tfidf tokenizer": TFIDFClassifier(tf_idf_config=full_word_tf_idf_config),
+        "rnn_tokenizer": DeepModel(word_vector=word_vector, config=DeepModelConfig(), tokenizer=Tokenizer().tokenize,
+                                   model_creator=SimpleRNN),
+
         "embedding svn": EmbeddingSVM(word_vector=word_vector),  # TODO : bug. prob output is clearly wrong
+        "tfidf tokenizer": TFIDFClassifier(tf_idf_config=full_word_tf_idf_config),
+        "tfidf ngram": TFIDFClassifier(tf_idf_config=asdict(TFIDFConfig(ngram_range=(1, 3), min_df=5))),
+
         "embedding lgbm": EmbeddingLGBM(word_vector=word_vector),
         # "fasttext self-trained": FastTextClassifier(),
         "cnn": DeepModel(word_vector=word_vector, config=DeepModelConfig(), tokenizer=list, model_creator=SimpleCnn),
@@ -52,7 +56,15 @@ def evaluate_all():
 
 
 if __name__ == '__main__':
-    import warnings
-
-    warnings.simplefilter("ignore")
-    evaluate_all()
+    # import warnings
+    #
+    # warnings.simplefilter("ignore")
+    # evaluate_all()
+    word_vector = WordVector()
+    a = DeepModel(word_vector=word_vector, config=DeepModelConfig(), tokenizer=Tokenizer().tokenize,
+              model_creator=SimpleCnn)
+    a.summary()
+    # a.model.build((20, 256))
+    # a.model.summary()
+    # from keras.utils.vis_utils import plot_model
+    # plot_model(a.model, to_file='model_plot.png', show_shapes=True, show_layer_names=True)

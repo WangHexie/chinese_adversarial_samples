@@ -264,6 +264,13 @@ class DeepModel(Classifier):
 
         return self
 
+    def summary(self):
+        a = self.model_creator(self.config.input_length, self.word_vector.vector.vectors.shape[0], self.word_vector.vector.vectors.shape[1], embedding_matrix=self.word_vector.vector.vectors)
+        a.model.build((20, 256))
+        a.model.summary()
+        from keras.utils.vis_utils import plot_model
+        plot_model(a.model, to_file='model_plot.png', show_shapes=True, show_layer_names=True)
+
     def get_embedding_and_middle_layers(self):
         return self.model.export_middle_layers()
 
